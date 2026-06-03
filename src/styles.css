@@ -16,6 +16,31 @@
   width: 100%;
 }
 
+.schematic-form__form,
+.schematic-form__surface,
+.schematic-form__fieldset,
+.schematic-form__field-group,
+.schematic-form__field,
+.schematic-form__array,
+.schematic-form__array-items,
+.schematic-form__array-row,
+.schematic-form__array-actions,
+.schematic-form__branch {
+  display: flex;
+  flex-direction: column;
+}
+
+.schematic-form__field,
+.schematic-form__array-actions {
+  gap: 0.25rem;
+}
+
+.schematic-form__array,
+.schematic-form__array-items,
+.schematic-form__array-row {
+  gap: 0.5rem;
+}
+
 .schematic-form__error-summary {
   border: 1px solid var(--color-danger, rgb(220 38 38));
   border-radius: 0.5rem;

@@ -48,7 +48,7 @@ describe("SchematicForm", () => {
 
     render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
 
-    expect(screen.getByRole("heading", {level: 4, name: "Scope"})).toHaveClass("typography", "typography--h4");
+    expect(screen.getByText("Scope")).toHaveClass("fieldset__legend");
     expect(screen.getByText("This block is display-only and will not be present in data.")).toHaveClass(
       "typography",
       "typography--body-sm",
@@ -68,6 +68,20 @@ describe("SchematicForm", () => {
     for (const surface of container.querySelectorAll(".schematic-form__surface")) {
       expect(surface).toHaveClass("rounded-lg", "border", "p-3");
     }
+
+    const owner = getSurface(container, "/owner");
+    const ownerLegend = owner.querySelector(".fieldset__legend");
+    const ownerDescription = within(owner).getByText("Nested objects render inside their own transparent surface.");
+    expect(ownerLegend).not.toBeNull();
+    expect(ownerLegend?.parentElement).toHaveClass("schematic-form__fieldset");
+    expect(ownerDescription.closest(".schematic-form__field-group")).toBeInTheDocument();
+
+    const milestones = getSurface(container, "/milestones");
+    const milestonesLegend = milestones.querySelector(".fieldset__legend");
+    const milestonesDescription = within(milestones).getByText("Array fields render item controls and an add button until maxItems is reached.");
+    expect(milestonesLegend).not.toBeNull();
+    expect(milestonesLegend?.parentElement).toHaveClass("schematic-form__fieldset");
+    expect(milestonesDescription.closest(".schematic-form__field-group")).toBeInTheDocument();
   });
 
   test("wraps radio and checkbox groups in transparent surfaces", () => {
@@ -75,8 +89,8 @@ describe("SchematicForm", () => {
 
     expect(screen.getByRole("radio", {name: "Internal"}).closest(".schematic-form__surface")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", {name: "Figma"}).closest(".schematic-form__surface")).toBeInTheDocument();
-    expect(container.querySelector(".schematic-form__form")).toHaveClass("flex", "flex-col", "gap-3");
-    expect(container.querySelector(".schematic-form__field-group")).toHaveClass("flex", "flex-col", "gap-3");
+    expect(container.querySelector(".schematic-form__form")).toHaveClass("flex", "flex-col", "gap-0");
+    expect(container.querySelector(".schematic-form__field-group")).toHaveClass("flex", "flex-col", "gap-0");
   });
 
   test("renders single input descriptions below the field control with HeroUI Description", () => {
@@ -258,19 +272,20 @@ describe("SchematicForm", () => {
       const description = within(surface).getByText(item.description);
 
       expect(surface).toHaveClass("surface--transparent", "rounded-lg", "border", "p-3");
+      expect(label).toHaveClass("fieldset__legend");
       expect(description).toHaveClass("description", "schematic-form__description");
       expectBefore(label, description);
     }
   });
 
-  test("renders enum and branch dropdown descriptions below matching selector lines without tags", () => {
+  test("renders dropdown descriptions in the expected semantic position without tags", () => {
     const {container} = render(
       <SchematicForm
         defaultValue={{channels: ["Email", "Web"], status: "Draft"}}
         schema={kitchenSinkSchema}
       />,
     );
-    const cases = [
+    const enumCases = [
       {
         containerSelector: '[data-sf-path="/status"]',
         fieldSelector: '[data-sf-path="/status"]',
@@ -281,14 +296,9 @@ describe("SchematicForm", () => {
         fieldSelector: '[data-sf-path="/channels"]',
         description: "Six or more enum string options render as a multiselect dropdown.",
       },
-      {
-        containerSelector: '.schematic-form__surface[data-sf-path="/payment"]',
-        fieldSelector: ".schematic-form__field",
-        description: "Branching uses a dropdown and anyOf is intentionally treated as oneOf in V1.",
-      },
     ];
 
-    for (const item of cases) {
+    for (const item of enumCases) {
       const fieldContainer = container.querySelector(item.containerSelector);
       expect(fieldContainer).toBeInTheDocument();
       const field = fieldContainer?.matches(item.fieldSelector)
@@ -304,7 +314,21 @@ describe("SchematicForm", () => {
       expectBefore(trigger as Element, description);
     }
 
+    const branch = getSurface(container, "/payment");
+    const branchField = branch.querySelector(".schematic-form__field");
+    const branchTrigger = branchField?.querySelector(".select__trigger");
+    const branchDescription = within(branch).getByText("Branching uses a dropdown and anyOf is intentionally treated as oneOf in V1.");
+
+    expect(branchField).toHaveClass("flex", "flex-col", "gap-1");
+    expect(branchTrigger).toBeInTheDocument();
+    expect(branchDescription).toHaveClass("description", "schematic-form__description");
+    expect(branchDescription.closest(".schematic-form__branch-group")).toBeInTheDocument();
+    expect(branchDescription.closest(".schematic-form__field")).not.toBeInTheDocument();
+    expectBefore(within(branch).getByText("Payment method"), branchDescription);
+    expectBefore(branchDescription, branchTrigger as Element);
+
     expect(container.querySelector(".schematic-form__tags")).not.toBeInTheDocument();
+    expect(within(branch).getByText("Payment method")).toHaveClass("fieldset__legend");
   });
 
   test("updates form data when selecting multiselect enum array options", async () => {
@@ -331,7 +355,8 @@ describe("SchematicForm", () => {
 
     const branch = container.querySelector('.schematic-form__branch[data-sf-path="/payment"]');
     expect(branch).toBeInTheDocument();
-    expect(branch).toHaveClass("surface--transparent", "rounded-lg", "border", "p-3", "flex", "flex-col", "gap-3");
+    expect(branch).toHaveClass("surface--transparent", "rounded-lg", "border", "p-3", "flex", "flex-col", "gap-0");
+    expect(within(branch as HTMLElement).getByText("Payment method")).toHaveClass("fieldset__legend");
     expect(within(branch as HTMLElement).getByRole("button", {name: /select an option payment method/i})).toBeInTheDocument();
 
     await waitFor(() => expect(onStateChange).toHaveBeenCalled());
@@ -363,6 +388,11 @@ describe("SchematicForm", () => {
     expect(within(branch).queryByText(/must have required property 'payment'/i)).not.toBeInTheDocument();
     expect(within(branch).queryByText(/must match exactly one schema/i)).not.toBeInTheDocument();
     expect(within(branch).getByText(/must have required property 'cardNumber'/i)).toBeInTheDocument();
+    const branchGroup = branch.querySelector(".schematic-form__branch-group");
+    expect(branchGroup).toHaveClass("space-y-4");
+    expect(branchGroup?.children[0]).toHaveClass("schematic-form__description");
+    expect(branchGroup?.children[1]).toHaveClass("schematic-form__field");
+    expect(branchGroup?.children[2]).toHaveClass("schematic-form__fieldset");
     await waitFor(() => expect(screen.getByLabelText("Card number")).toHaveFocus());
   });
 
@@ -407,7 +437,12 @@ describe("SchematicForm", () => {
     expect(screen.getByRole("button", {name: /pickup delivery type/i})).toBeInTheDocument();
     const branch = getSurface(container, "/delivery");
     expect(branch).toHaveClass("schematic-form__branch");
-    expect(branch.querySelector(".fieldset__legend")).toHaveTextContent("Pickup");
+    expect(within(branch).getByText("Delivery type")).toHaveClass("fieldset__legend");
+    const branchGroup = branch.querySelector(".schematic-form__branch-group");
+    expect(branchGroup).toHaveClass("space-y-4");
+    expect(branchGroup?.children[0]).toHaveClass("schematic-form__field");
+    expect(branchGroup?.children[1]).toHaveClass("schematic-form__fieldset");
+    expect(branch.querySelectorAll(".fieldset__legend")[1]).toHaveTextContent("Pickup");
     expect(screen.getByLabelText("Store")).toBeInTheDocument();
     expect(screen.queryByLabelText("Address")).not.toBeInTheDocument();
   });
