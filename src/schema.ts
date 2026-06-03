@@ -86,8 +86,13 @@ export function getSupportedFormat(schema: JsonSchema): SupportedStringFormat | 
     : undefined;
 }
 
-export function isShortUnformattedString(schema: JsonSchema): boolean {
-  return getSchemaType(schema) === "string" && !getSupportedFormat(schema) && (schema.maxLength == null || schema.maxLength < 256);
+export function isLongUnformattedString(schema: JsonSchema): boolean {
+  return (
+    getSchemaType(schema) === "string" &&
+    !getSupportedFormat(schema) &&
+    ((typeof schema.minLength === "number" && schema.minLength > 255) ||
+      (typeof schema.maxLength === "number" && schema.maxLength > 255))
+  );
 }
 
 export function isEnumSchema(schema: JsonSchema): boolean {

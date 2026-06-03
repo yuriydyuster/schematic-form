@@ -8,15 +8,23 @@ export const kitchenSinkSchema = {
   propertyOrdering: [
     "intro",
     "projectName",
+    "summary",
+    "contactEmail",
+    "referenceUrl",
+    "requiresReview",
     "priority",
+    "audience",
     "status",
     "channels",
     "tools",
+    "reviewTags",
     "budget",
     "launchDate",
     "launchTime",
     "approvalDeadline",
+    "owner",
     "payment",
+    "fulfillment",
     "milestones",
   ],
   properties: {
@@ -28,9 +36,32 @@ export const kitchenSinkSchema = {
     projectName: {
       type: "string",
       title: "Project name",
-      description: "Unformatted short strings render as multiline fields by default.",
+      description: "Short unformatted strings render as single-line inputs by default.",
       minLength: 2,
       maxLength: 120,
+    },
+    summary: {
+      type: "string",
+      title: "Project summary",
+      description: "Long unformatted strings render as multiline text areas.",
+      maxLength: 512,
+    },
+    contactEmail: {
+      type: "string",
+      title: "Contact email",
+      description: "Email format strings render as email inputs.",
+      format: "email",
+    },
+    referenceUrl: {
+      type: "string",
+      title: "Reference URL",
+      description: "URI format strings render as URL inputs.",
+      format: "uri",
+    },
+    requiresReview: {
+      type: "boolean",
+      title: "Requires review",
+      description: "Boolean fields render with HeroUI switch controls.",
     },
     priority: {
       type: "integer",
@@ -38,6 +69,12 @@ export const kitchenSinkSchema = {
       description: "Integer values with minimum and maximum render as a horizontal slider.",
       minimum: 1,
       maximum: 5,
+    },
+    audience: {
+      type: "string",
+      title: "Audience",
+      description: "Fewer than six enum options render as radio buttons.",
+      enum: ["Internal", "Customer", "Partner"],
     },
     status: {
       type: "string",
@@ -69,6 +106,18 @@ export const kitchenSinkSchema = {
         enum: ["Figma", "GitHub", "Vercel"],
       },
     },
+    reviewTags: {
+      type: "array",
+      title: "Review tags",
+      description: "Unique enum string arrays keep one instance of each selected string.",
+      uniqueItems: true,
+      items: {
+        type: "string",
+        title: "Review tag",
+        description: "A unique review tag for filtering project feedback.",
+        enum: ["Accessibility", "Performance", "Security", "Design", "Content", "Compliance"],
+      },
+    },
     budget: {
       type: "number",
       title: "Budget",
@@ -92,6 +141,40 @@ export const kitchenSinkSchema = {
       title: "Approval deadline",
       description: "Date-time strings render with HeroUI DatePicker minute granularity.",
       format: "date-time",
+    },
+    owner: {
+      type: "object",
+      title: "Owner",
+      description: "Nested objects render inside their own transparent surface.",
+      required: ["name"],
+      propertyOrdering: ["name", "email", "website", "notes"],
+      properties: {
+        name: {
+          type: "string",
+          title: "Owner name",
+          description: "Nested short strings render as full-width single-line inputs.",
+          maxLength: 120,
+        },
+        email: {
+          type: "string",
+          title: "Owner email",
+          description: "Nested email fields use the same formatted string layout.",
+          format: "email",
+        },
+        website: {
+          type: "string",
+          title: "Owner website",
+          description: "Nested URI fields use the same formatted string layout.",
+          format: "uri",
+        },
+        notes: {
+          type: "string",
+          title: "Owner notes",
+          description: "Empty strings are preserved only when minLength is explicitly zero.",
+          minLength: 0,
+          maxLength: 512,
+        },
+      },
     },
     payment: {
       title: "Payment method",
@@ -127,6 +210,40 @@ export const kitchenSinkSchema = {
         },
       ],
     },
+    fulfillment: {
+      title: "Fulfillment path",
+      description: "oneOf branches use the same dropdown selector layout as anyOf.",
+      oneOf: [
+        {
+          type: "object",
+          title: "Self serve",
+          description: "Collect details for a self-serve fulfillment path.",
+          required: ["portal"],
+          properties: {
+            portal: {
+              type: "string",
+              title: "Portal URL",
+              description: "URI format strings render as URL inputs inside branch variants.",
+              format: "uri",
+            },
+          },
+        },
+        {
+          type: "object",
+          title: "Assisted",
+          description: "Collect details for an assisted fulfillment path.",
+          required: ["manager"],
+          properties: {
+            manager: {
+              type: "string",
+              title: "Manager",
+              description: "Short strings render as single-line inputs inside branch variants.",
+              maxLength: 120,
+            },
+          },
+        },
+      ],
+    },
     milestones: {
       type: "array",
       title: "Milestones",
@@ -141,7 +258,7 @@ export const kitchenSinkSchema = {
           name: {
             type: "string",
             title: "Name",
-            description: "Short milestone names render as multiline fields by default.",
+            description: "Short milestone names render as single-line inputs by default.",
             maxLength: 80,
           },
           due: {
@@ -156,7 +273,6 @@ export const kitchenSinkSchema = {
   },
 } satisfies JsonSchema;
 
-
 export const primitiveSchema = {
   type: "object",
   title: "Primitive fields",
@@ -166,7 +282,7 @@ export const primitiveSchema = {
     name: {
       type: "string",
       title: "Name",
-      description: "Required short string rendered as a multiline text field.",
+      description: "Required short string rendered as a single-line text field.",
       minLength: 2,
     },
     email: {
@@ -185,7 +301,7 @@ export const primitiveSchema = {
     newsletter: {
       type: "boolean",
       title: "Subscribe to newsletter",
-      description: "Boolean fields render with HeroUI checkbox controls.",
+      description: "Boolean fields render with HeroUI switch controls.",
     },
   },
 } satisfies JsonSchema;

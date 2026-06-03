@@ -22,3 +22,7 @@
   color: var(--color-danger, rgb(185 28 28));
   padding: 0.75rem;
 }
+
+.schematic-form__button-icon {
+  flex: 0 0 auto;
+}

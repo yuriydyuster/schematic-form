@@ -1,4 +1,5 @@
 import * as HeroUI from "@heroui/react";
+import {ArrowDown, ArrowUp, Plus, TrashBin} from "@gravity-ui/icons";
 import {
   getLocalTimeZone,
   parseAbsoluteToLocal,
@@ -33,7 +34,7 @@ import {
   isArrayOfStringEnum,
   isDisplayOnlySchema,
   isEnumSchema,
-  isShortUnformattedString,
+  isLongUnformattedString,
   keyToEnumValue,
   optionLabel,
 } from "./schema";
@@ -71,6 +72,7 @@ const RadioGroup = H.RadioGroup;
 const Select = H.Select;
 const Slider = H.Slider;
 const Surface = H.Surface;
+const Switch = H.Switch;
 const TextArea = H.TextArea;
 const TextField = H.TextField;
 const TimeField = H.TimeField;
@@ -118,6 +120,8 @@ const RadioContent = Radio?.Content ?? ((props: React.HTMLAttributes<HTMLSpanEle
 const CheckboxControl = Checkbox?.Control ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const CheckboxIndicator = Checkbox?.Indicator ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const CheckboxContent = Checkbox?.Content ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
+const SwitchControl = Switch?.Control ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
+const SwitchThumb = Switch?.Thumb ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const SliderOutput = Slider?.Output ?? ((props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />);
 const SliderTrack = Slider?.Track ?? ((props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />);
 const SliderFill = Slider?.Fill ?? (() => null);
@@ -137,10 +141,10 @@ const defaultMessages = {
 };
 
 const surfaceClassName = "schematic-form__surface rounded-lg border p-3";
-const fieldClassName = "schematic-form__field flex flex-col gap-2";
-const fieldsetClassName = "schematic-form__fieldset flex flex-col gap-4";
-const fieldGroupClassName = "schematic-form__field-group flex flex-col gap-4";
-const branchClassName = "schematic-form__branch flex flex-col gap-4";
+const fieldClassName = "schematic-form__field flex flex-col gap-1";
+const fieldsetClassName = "schematic-form__fieldset flex flex-col gap-3";
+const fieldGroupClassName = "schematic-form__field-group flex flex-col gap-3";
+const branchClassName = "schematic-form__branch flex flex-col gap-3";
 
 export function SchematicForm<TData = unknown>({
   schema,
@@ -209,7 +213,7 @@ export function SchematicForm<TData = unknown>({
   const setFieldValue = useCallback(
     (path: PathSegment[], fieldSchema: JsonSchema, nextValue: unknown, required: boolean) => {
       const type = getSchemaType(fieldSchema);
-      const shouldDeleteEmptyString = !required && type === "string" && nextValue === "";
+      const shouldDeleteEmptyString = type === "string" && nextValue === "" && fieldSchema.minLength !== 0;
       const shouldDeleteEmptyArray = !required && type === "array" && Array.isArray(nextValue) && nextValue.length === 0;
       const nextData =
         shouldDeleteEmptyString || shouldDeleteEmptyArray
@@ -263,6 +267,7 @@ export function SchematicForm<TData = unknown>({
     disabled,
     readOnly,
     fieldRenderer,
+    formRef,
     getVisibleIssues,
     issueMap,
     markTouched,
@@ -284,7 +289,7 @@ export function SchematicForm<TData = unknown>({
       <Form
         ref={formRef}
         aria-label={formLabel || "Schematic form"}
-        className="schematic-form__form flex flex-col gap-4"
+        className="schematic-form__form flex flex-col gap-3"
         validationBehavior="aria"
         onSubmit={handleSubmit}
       >
@@ -292,7 +297,7 @@ export function SchematicForm<TData = unknown>({
           <ErrorSummary title={mergedMessages.errorSummaryTitle} errors={validation.errors} />
         ) : null}
         {renderSchema(jsonSchema, [], false, context)}
-        <div className="schematic-form__form-actions flex flex-wrap gap-2">
+        <div className="schematic-form__form-actions flex flex-wrap gap-1">
           <Button isDisabled={disabled} type="submit">
             {mergedMessages.submit}
           </Button>
@@ -307,6 +312,7 @@ type RendererContext<TData> = {
   disabled: boolean;
   readOnly: boolean;
   fieldRenderer?: SchematicFormProps<TData>["fieldRenderer"];
+  formRef: React.RefObject<HTMLFormElement | null>;
   getVisibleIssues(pointer: string): ValidationIssue[];
   issueMap: Map<string, ValidationIssue[]>;
   markTouched(pointer: string): void;
@@ -465,42 +471,83 @@ function renderArray<TData>(
     <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
       <Fieldset className={fieldsetClassName}>
         <FieldsetLegend>{label}</FieldsetLegend>
-        {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-        <div className="schematic-form__array flex flex-col gap-3">
-          <div className="schematic-form__array-items flex flex-col gap-3">
-            {items.map((_, index) => (
-              <div className="schematic-form__array-row flex flex-col gap-3" key={rowIds[index] ?? `${pointer}-${index}`}>
-                {renderSchema(withIndexedArrayItemTitle(itemSchema, index), [...path, index], true, context)}
-                <div className="schematic-form__row-actions grid grid-cols-3 gap-2">
-                  <Button fullWidth isDisabled={context.disabled || index === 0} type="button" variant="secondary" onPress={() => moveItem(index, index - 1)}>
-                    {context.messages.moveUp}
-                  </Button>
-                  <Button
-                    fullWidth
-                    isDisabled={context.disabled || index === items.length - 1}
-                    type="button"
-                    variant="secondary"
-                    onPress={() => moveItem(index, index + 1)}
-                  >
-                    {context.messages.moveDown}
-                  </Button>
-                  <Button fullWidth isDisabled={context.disabled} type="button" variant="secondary" onPress={() => removeItem(index)}>
-                    {context.messages.remove}
-                  </Button>
-                </div>
-              </div>
-            ))}
+        <SchemaFieldHelp description={schema.description} issues={issues} />
+        <div className="schematic-form__array flex flex-col gap-2">
+          <div className="schematic-form__array-items flex flex-col gap-2">
+            {items.map((_, index) => {
+              const itemPath = [...path, index];
+              const itemPointer = toPointer(itemPath);
+              return (
+                <Surface
+                  className={`${surfaceClassName} schematic-form__array-row flex flex-col gap-2`}
+                  data-sf-path={itemPointer}
+                  key={rowIds[index] ?? `${pointer}-${index}`}
+                  variant="transparent"
+                >
+                  {renderArrayItemSchema(withIndexedArrayItemTitle(itemSchema, index), itemPath, context)}
+                  <div className="schematic-form__row-actions grid grid-cols-3 gap-1">
+                    <Button
+                      fullWidth
+                      isDisabled={context.disabled || index === 0}
+                      type="button"
+                      variant="secondary"
+                      onPress={() => moveItem(index, index - 1)}
+                    >
+                      <ButtonIcon icon={ArrowUp} />
+                      <span>{context.messages.moveUp}</span>
+                    </Button>
+                    <Button
+                      fullWidth
+                      isDisabled={context.disabled || index === items.length - 1}
+                      type="button"
+                      variant="secondary"
+                      onPress={() => moveItem(index, index + 1)}
+                    >
+                      <ButtonIcon icon={ArrowDown} />
+                      <span>{context.messages.moveDown}</span>
+                    </Button>
+                    <Button
+                      fullWidth
+                      isDisabled={context.disabled}
+                      type="button"
+                      variant="danger-soft"
+                      onPress={() => removeItem(index)}
+                    >
+                      <ButtonIcon icon={TrashBin} />
+                      <span>{context.messages.remove}</span>
+                    </Button>
+                  </div>
+                </Surface>
+              );
+            })}
           </div>
-          {issues.length ? <IssueList issues={issues} /> : null}
-          <div className="schematic-form__array-actions flex flex-col gap-2">
+          <div className="schematic-form__array-actions flex flex-col gap-1">
             <Button fullWidth isDisabled={context.disabled || !canAdd} type="button" variant="secondary" onPress={addItem}>
-              + {context.messages.add} {itemLabel}
+              <ButtonIcon icon={Plus} />
+              <span>{context.messages.add} {itemLabel}</span>
             </Button>
           </div>
         </div>
       </Fieldset>
     </Surface>
   );
+}
+
+function renderArrayItemSchema<TData>(
+  schema: JsonSchema,
+  path: PathSegment[],
+  context: RendererContext<TData>,
+) {
+  if (isDisplayOnlySchema(schema)) return renderDisplayOnly(schema, path);
+
+  const branch = getBranchSchemas(schema);
+  if (branch) return renderBranch(schema, path, true, branch.branches, context);
+
+  if (getSchemaType(schema) === "object") {
+    return renderObjectFieldset(schema, path, context);
+  }
+
+  return renderSchema(schema, path, true, context);
 }
 
 function renderBranch<TData>(
@@ -527,6 +574,7 @@ function renderBranch<TData>(
     const nextDefault = defaultValueForSchema(branches[nextIndex]);
     const nextData = nextDefault === undefined ? deleteAtPath(context.data, path) : setAtPath(context.data, path, nextDefault);
     context.commitData(nextData);
+    window.setTimeout(() => focusFirstNestedField(context.formRef.current, pointer), 0);
   };
 
   return (
@@ -543,8 +591,7 @@ function renderBranch<TData>(
           onBlur={() => context.markTouched(pointer)}
           onChange={setBranch}
         />
-        {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-        {issues.length ? <SchemaIssueList issues={issues} /> : null}
+        <SchemaFieldHelp description={schema.description} issues={issues} />
       </div>
       {selected ? renderBranchVariant(selected, path, required, context) : null}
     </Surface>
@@ -600,7 +647,7 @@ function renderString<TData>(
   if (format === "time") return renderTimeField(schema, path, required, context);
 
   const inputType = formatToInputType(format);
-  const multiline = isShortUnformattedString(schema);
+  const multiline = isLongUnformattedString(schema);
   const Control = multiline ? TextArea : Input;
 
   return (
@@ -627,8 +674,7 @@ function renderString<TData>(
         pattern={schema.pattern}
         rows={multiline ? 4 : undefined}
       />
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <FieldHelp description={schema.description} issues={issues} />
     </TextField>
   );
 }
@@ -677,8 +723,7 @@ function renderDatePicker<TData>(
           </DatePickerTrigger>
         </DateFieldSuffix>
       </DateFieldGroup>
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <FieldHelp description={schema.description} issues={issues} />
       <DatePickerPopover>
         <Calendar aria-label={`${label} calendar`}>
           <CalendarHeader>
@@ -740,8 +785,7 @@ function renderTimeField<TData>(
           {(segment: unknown) => <TimeFieldSegment segment={segment} />}
         </TimeFieldInput>
       </TimeFieldGroup>
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <FieldHelp description={schema.description} issues={issues} />
     </TimeField>
   );
 }
@@ -786,8 +830,7 @@ function renderNumber<TData>(
         <NumberFieldInput className="schematic-form__control" />
         <NumberFieldIncrementButton />
       </NumberFieldGroup>
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <FieldHelp description={schema.description} issues={issues} />
     </NumberField>
   );
 }
@@ -821,14 +864,15 @@ function renderIntegerSlider<TData>(
         context.setFieldValue(path, schema, nextValue, required);
       }}
     >
-      <Label>{label}</Label>
-      <SliderOutput />
+      <div className="schematic-form__slider-header flex items-center justify-between gap-1">
+        <Label>{label}</Label>
+        <SliderOutput />
+      </div>
       <SliderTrack>
         <SliderFill />
         <SliderThumb name={toFieldPath(path)} />
       </SliderTrack>
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <SchemaFieldHelp description={schema.description} issues={issues} />
     </Slider>
   );
 }
@@ -846,26 +890,25 @@ function renderBoolean<TData>(
 
   return (
     <div className={fieldClassName} data-sf-path={pointer} key={pointer}>
-      <Checkbox
-        aria-label={label}
-        isDisabled={context.disabled}
-        isInvalid={issues.length > 0}
-        isReadOnly={context.readOnly}
-        isRequired={required}
-        isSelected={value}
-        name={toFieldPath(path)}
-        onBlur={() => context.markTouched(pointer)}
-        onChange={(next: boolean) => context.setFieldValue(path, schema, next, required)}
-      >
-        <CheckboxControl>
-          <CheckboxIndicator />
-        </CheckboxControl>
-        <CheckboxContent>
-          <Label>{label}</Label>
-        </CheckboxContent>
-      </Checkbox>
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <div className="schematic-form__switch-row flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        <Switch
+          aria-label={label}
+          isDisabled={context.disabled}
+          isInvalid={issues.length > 0}
+          isReadOnly={context.readOnly}
+          isRequired={required}
+          isSelected={value}
+          name={toFieldPath(path)}
+          onBlur={() => context.markTouched(pointer)}
+          onChange={(next: boolean) => context.setFieldValue(path, schema, next, required)}
+        >
+          <SwitchControl>
+            <SwitchThumb />
+          </SwitchControl>
+        </Switch>
+      </div>
+      <FieldHelp description={schema.description} issues={issues} />
     </div>
   );
 }
@@ -895,33 +938,32 @@ function renderRadioEnum<TData>(
   const issues = context.getVisibleIssues(pointer);
 
   return (
-    <RadioGroup
-      className={fieldClassName}
-      data-sf-path={pointer}
-      isDisabled={context.disabled}
-      isInvalid={issues.length > 0}
-      isReadOnly={context.readOnly}
-      isRequired={required}
-      key={pointer}
-      name={toFieldPath(path)}
-      value={selectedKey}
-      onBlur={() => context.markTouched(pointer)}
-      onChange={(key: string) => context.setFieldValue(path, schema, keyToEnumValue(key, options), required)}
-    >
-      <Label>{label}</Label>
-      {options.map((option) => (
-        <Radio key={enumValueToKey(option)} value={enumValueToKey(option)}>
-          <RadioControl>
-            <RadioIndicator />
-          </RadioControl>
-          <RadioContent>
-            <Label>{optionLabel(option)}</Label>
-          </RadioContent>
-        </Radio>
-      ))}
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
-    </RadioGroup>
+    <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
+      <RadioGroup
+        className={fieldClassName}
+        isDisabled={context.disabled}
+        isInvalid={issues.length > 0}
+        isReadOnly={context.readOnly}
+        isRequired={required}
+        name={toFieldPath(path)}
+        value={selectedKey}
+        onBlur={() => context.markTouched(pointer)}
+        onChange={(key: string) => context.setFieldValue(path, schema, keyToEnumValue(key, options), required)}
+      >
+        <Label>{label}</Label>
+        <SchemaFieldHelp description={schema.description} issues={issues} />
+        {options.map((option) => (
+          <Radio key={enumValueToKey(option)} value={enumValueToKey(option)}>
+            <RadioControl>
+              <RadioIndicator />
+            </RadioControl>
+            <RadioContent>
+              <Label>{optionLabel(option)}</Label>
+            </RadioContent>
+          </Radio>
+        ))}
+      </RadioGroup>
+    </Surface>
   );
 }
 
@@ -951,8 +993,7 @@ function renderDropdownEnum<TData>(
         onBlur={() => context.markTouched(pointer)}
         onChange={(key) => context.setFieldValue(path, schema, keyToEnumValue(key, options), required)}
       />
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <SchemaFieldHelp description={schema.description} issues={issues} />
     </div>
   );
 }
@@ -995,7 +1036,7 @@ function renderCheckboxEnumArray<TData>(
         onChange={(next: string[]) => context.setFieldValue(path, schema, normalizeStringEnumArray(next, schema), required)}
       >
         <Label>{label}</Label>
-        {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
+        <FieldHelp description={schema.description} issues={issues} />
         {options.map((option) => (
           <Checkbox aria-label={option} key={option} value={option}>
             <CheckboxControl>
@@ -1006,7 +1047,6 @@ function renderCheckboxEnumArray<TData>(
             </CheckboxContent>
           </Checkbox>
         ))}
-        {issues.length ? <IssueList issues={issues} /> : null}
       </CheckboxGroup>
     </Surface>
   );
@@ -1044,8 +1084,7 @@ function renderMultiselectEnumArray<TData>(
         onBlur={() => context.markTouched(pointer)}
         onMultipleChange={setValues}
       />
-      {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-      {issues.length ? <IssueList issues={issues} /> : null}
+      <SchemaFieldHelp description={schema.description} issues={issues} />
     </div>
   );
 }
@@ -1054,6 +1093,8 @@ type DropdownOption = {
   key: string;
   label: string;
 };
+
+type GravityIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 function Dropdown({
   disabled,
@@ -1092,16 +1133,18 @@ function Dropdown({
       name={name}
       placeholder="Select an option"
       selectedKey={multiple ? undefined : selectedKey ?? null}
+      selectedKeys={multiple ? selectedKeys ?? new Set<string>() : undefined}
       selectionMode={multiple ? "multiple" : "single"}
-      value={multiple ? [...(selectedKeys ?? new Set<string>())] : undefined}
       onBlur={onBlur}
-      onChange={(value: unknown) => {
+      onChange={(event: unknown) => {
         if (!multiple) return;
-        const keys = Array.isArray(value) ? value : value == null ? [] : [value];
-        onMultipleChange?.(new Set(keys.map(String)));
+        onMultipleChange?.(selectionToStringSet(event, options));
       }}
       onSelectionChange={(selection: unknown) => {
-        if (multiple) return;
+        if (multiple) {
+          onMultipleChange?.(selectionToStringSet(selection, options));
+          return;
+        }
         if (selection != null) onChange?.(String(selection));
       }}
     >
@@ -1124,12 +1167,47 @@ function Dropdown({
   );
 }
 
+function selectionToStringSet(selection: unknown, options: DropdownOption[]): Set<string> {
+  const eventTarget = getSelectionEventTarget(selection);
+  if (eventTarget) {
+    const selected = Array.from(eventTarget.selectedOptions).map((option) => option.value);
+    if (selected.length > 0) return new Set(selected);
+    return eventTarget.value ? new Set([eventTarget.value]) : new Set();
+  }
+
+  if (selection === "all") return new Set(options.map((option) => option.key));
+  if (selection instanceof Set) return new Set([...selection].map(String));
+  if (Array.isArray(selection)) return new Set(selection.map(String));
+  if (selection == null) return new Set();
+  return new Set([String(selection)]);
+}
+
+function getSelectionEventTarget(selection: unknown): HTMLSelectElement | null {
+  if (!selection || typeof selection !== "object") return null;
+  const target = (selection as {target?: unknown}).target;
+  return target instanceof HTMLSelectElement ? target : null;
+}
+
 function FieldDescription({children}: {children: React.ReactNode}) {
   return (
     <Description className="schematic-form__description" data-slot="schema-description" slot="description">
       {children}
     </Description>
   );
+}
+
+function FieldHelp({description, issues}: {description?: string; issues: ValidationIssue[]}) {
+  if (issues.length) return <IssueList issues={issues} />;
+  return description ? <FieldDescription>{description}</FieldDescription> : null;
+}
+
+function SchemaFieldHelp({description, issues}: {description?: string; issues: ValidationIssue[]}) {
+  if (issues.length) return <SchemaIssueList issues={issues} />;
+  return description ? <FieldDescription>{description}</FieldDescription> : null;
+}
+
+function ButtonIcon({icon: Icon}: {icon: GravityIcon}) {
+  return <Icon aria-hidden="true" className="schematic-form__button-icon" focusable="false" />;
 }
 
 function IssueList({issues}: {issues: ValidationIssue[]}) {
@@ -1236,6 +1314,43 @@ function focusFirstIssue(form: HTMLFormElement | null, issues: ValidationIssue[]
     target?.focus();
     return;
   }
+}
+
+function focusFirstNestedField(form: HTMLFormElement | null, pointer: string) {
+  if (!form) return;
+  const prefix = pointer === "/" ? "/" : `${pointer}/`;
+
+  for (const container of form.querySelectorAll<HTMLElement>("[data-sf-path]")) {
+    const path = container.dataset.sfPath ?? "";
+    if (!path.startsWith(prefix) || path === pointer) continue;
+
+    const target = getFocusableTarget(container);
+    if (!target) continue;
+
+    target.focus();
+    target.click();
+    return;
+  }
+}
+
+function getFocusableTarget(container: HTMLElement): HTMLElement | null {
+  if (isFocusable(container)) return container;
+  return container.querySelector<HTMLElement>(
+    [
+      "input:not([type='hidden']):not([disabled])",
+      "textarea:not([disabled])",
+      "button:not([disabled])",
+      "select:not([disabled])",
+      "[tabindex]:not([tabindex='-1'])",
+    ].join(", "),
+  );
+}
+
+function isFocusable(element: HTMLElement) {
+  if (element.hasAttribute("disabled")) return false;
+  if (element.getAttribute("tabindex") === "-1") return false;
+  const tagName = element.tagName.toLowerCase();
+  return tagName === "textarea" || tagName === "button" || tagName === "select" || (tagName === "input" && element.getAttribute("type") !== "hidden");
 }
 
 function getRowIds<TData>(context: RendererContext<TData>, pointer: string, length: number): string[] {

@@ -6,7 +6,7 @@ import {
   getOrderedPropertyKeys,
   isArrayOfStringEnum,
   isDisplayOnlySchema,
-  isShortUnformattedString,
+  isLongUnformattedString,
 } from "./schema";
 import type {JsonSchema} from "./types";
 
@@ -66,11 +66,12 @@ describe("schema helpers", () => {
     expect(defaultValueForSchema(schema)).toEqual({store: "Main"});
   });
 
-  test("detects multiline default and enum string arrays", () => {
-    expect(isShortUnformattedString({type: "string"})).toBe(true);
-    expect(isShortUnformattedString({type: "string", maxLength: 255})).toBe(true);
-    expect(isShortUnformattedString({type: "string", maxLength: 256})).toBe(false);
-    expect(isShortUnformattedString({type: "string", format: "email"})).toBe(false);
+  test("detects long unformatted multiline strings and enum string arrays", () => {
+    expect(isLongUnformattedString({type: "string"})).toBe(false);
+    expect(isLongUnformattedString({type: "string", maxLength: 255})).toBe(false);
+    expect(isLongUnformattedString({type: "string", maxLength: 256})).toBe(true);
+    expect(isLongUnformattedString({type: "string", minLength: 256})).toBe(true);
+    expect(isLongUnformattedString({type: "string", format: "email", maxLength: 256})).toBe(false);
 
     expect(
       isArrayOfStringEnum({
