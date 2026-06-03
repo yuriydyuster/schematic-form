@@ -73,7 +73,7 @@ V1 public state must always include `data`, `isValid`, and `errors[]`.
   - string/number `enum` with 6 or more options -> dropdown
   - array of enum strings with fewer than 6 options -> `CheckboxGroup`
   - array of enum strings with 6 or more options -> multiselect dropdown
-  - dropdown-selected values -> `TagGroup`, except branch selection dropdowns for `oneOf`/`anyOf`
+  - dropdown-selected values -> rendered by the HeroUI select value only; no separate `TagGroup`
   - `oneOf` and `anyOf` -> dropdown branch selector using branch titles; treat `anyOf` as `oneOf` for V1
 - Respect `uniqueItems` only for arrays whose `items` are enum strings.
 - Keep validation separate from rendering:
@@ -115,7 +115,7 @@ V1 public state must always include `data`, `isValid`, and `errors[]`.
   - all object and array levels render transparent `Surface` plus `Fieldset`
   - descriptions render above fields
   - enum fields choose `RadioGroup`, dropdown, `CheckboxGroup`, or multiselect dropdown according to option count and array shape
-  - dropdown selections render as `TagGroup`, except branch selection
+  - dropdown selections render through the HeroUI select value without separate tags
   - integer min/max fields render as horizontal sliders
   - controlled and uncontrolled modes both emit `onStateChange`
 - Chrome DevTools MCP browser acceptance tests:
