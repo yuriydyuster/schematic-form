@@ -16,3 +16,4 @@ yarn-debug.log*
 pnpm-debug.log*
 .turbo
 deep-research-report.md
+.github/workflows/check.yml
