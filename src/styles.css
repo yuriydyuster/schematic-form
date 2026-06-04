@@ -35,6 +35,14 @@
   gap: 0.25rem;
 }
 
+.schematic-form__field-group {
+  gap: 1rem;
+}
+
+.schematic-form__field-group > :not(:last-child) {
+  margin-block: 0;
+}
+
 .schematic-form__array,
 .schematic-form__array-items,
 .schematic-form__array-row {

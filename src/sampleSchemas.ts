@@ -25,6 +25,7 @@ export const kitchenSinkSchema = {
     "owner",
     "payment",
     "fulfillment",
+    "mixedItems",
     "milestones",
   ],
   properties: {
@@ -243,6 +244,55 @@ export const kitchenSinkSchema = {
           },
         },
       ],
+    },
+    mixedItems: {
+      type: "array",
+      title: "Mixed items",
+      description: "Array items can choose between object, enum string, null, and boolean oneOf variants.",
+      maxItems: 4,
+      items: {
+        title: "Mixed item",
+        description: "Each item selects one of four different schema shapes.",
+        default: {label: ""},
+        oneOf: [
+          {
+            type: "object",
+            title: "Object",
+            description: "Collects a labeled note for this item.",
+            required: ["label"],
+            properties: {
+              label: {
+                type: "string",
+                title: "Label",
+                description: "Short label for the object item.",
+                maxLength: 80,
+              },
+              note: {
+                type: "string",
+                title: "Note",
+                description: "Optional note for the object item.",
+                maxLength: 160,
+              },
+            },
+          },
+          {
+            type: "string",
+            title: "Enum string",
+            description: "Choose a named string value.",
+            enum: ["Alpha", "Beta", "Gamma"],
+          },
+          {
+            type: "null",
+            title: "Null",
+            description: "Represents an intentionally empty item.",
+          },
+          {
+            type: "boolean",
+            title: "Boolean",
+            description: "Toggle a true or false item value.",
+          },
+        ],
+      },
     },
     milestones: {
       type: "array",

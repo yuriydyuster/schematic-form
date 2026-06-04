@@ -148,6 +148,7 @@ const fieldsetClassName = `schematic-form__fieldset flex flex-col ${fieldGapClas
 const fieldGroupClassName = `schematic-form__field-group flex flex-col ${fieldGapClassName}`;
 const branchClassName = `schematic-form__branch flex flex-col ${fieldGapClassName}`;
 const branchGroupClassName = `schematic-form__branch-group ${schemaSectionSpacingClassName}`;
+type BranchRenderOptions = {surface?: boolean};
 
 export function SchematicForm<TData = unknown>({
   schema,
@@ -292,7 +293,7 @@ export function SchematicForm<TData = unknown>({
       <Form
         ref={formRef}
         aria-label={formLabel || "Schematic form"}
-        className={`schematic-form__form flex flex-col ${fieldGapClassName}`}
+        className={`schematic-form__form flex flex-col gap-3`}
         validationBehavior="aria"
         onSubmit={handleSubmit}
       >
@@ -490,7 +491,7 @@ function renderArray<TData>(
                     variant="transparent"
                   >
                     {renderArrayItemSchema(withIndexedArrayItemTitle(itemSchema, index), itemPath, context)}
-                    <div className="schematic-form__row-actions grid grid-cols-3 gap-1">
+                    <div className="schematic-form__row-actions mt-4 grid grid-cols-3 gap-1">
                       <Button
                         fullWidth
                         isDisabled={context.disabled || index === 0}
@@ -547,7 +548,7 @@ function renderArrayItemSchema<TData>(
   if (isDisplayOnlySchema(schema)) return renderDisplayOnly(schema, path);
 
   const branch = getBranchSchemas(schema);
-  if (branch) return renderBranch(schema, path, true, branch.branches, context);
+  if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false});
 
   if (getSchemaType(schema) === "object") {
     return renderObjectFieldset(schema, path, context);
@@ -562,13 +563,14 @@ function renderBranch<TData>(
   required: boolean,
   branches: JsonSchema[],
   context: RendererContext<TData>,
+  options: BranchRenderOptions = {},
 ) {
   const pointer = toPointer(path);
   const label = getLabel(schema, path, "Option");
   const selectedIndex = context.branchSelection[pointer] ?? getDefaultBranchIndex(schema, branches);
   const selected = selectedIndex == null ? undefined : branches[selectedIndex];
   const issues = getBranchSelectorIssues(context.getVisibleIssues(pointer), selectedIndex);
-  const options = branches.map((branch, index) => ({
+  const branchOptions = branches.map((branch, index) => ({
     key: String(index),
     label: branch.title || `Option ${index + 1}`,
   }));
@@ -577,35 +579,40 @@ function renderBranch<TData>(
     const nextIndex = Number(key);
     if (!Number.isInteger(nextIndex) || !branches[nextIndex]) return;
     context.setBranchSelection((current) => ({...current, [pointer]: nextIndex}));
-    const nextDefault = defaultValueForSchema(branches[nextIndex]);
+    const nextDefault = defaultBranchValue(branches[nextIndex]);
     const nextData = nextDefault === undefined ? deleteAtPath(context.data, path) : setAtPath(context.data, path, nextDefault);
     context.commitData(nextData);
     window.setTimeout(() => focusFirstNestedField(context.formRef.current, pointer), 0);
   };
+  const content = (
+    <Fieldset className={fieldsetClassName} key={pointer}>
+      <FieldsetLegend>{label}</FieldsetLegend>
+      <FieldsetGroup className={`${fieldGroupClassName} ${branchGroupClassName}`}>
+        {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
+        <div className={fieldClassName}>
+          <Dropdown
+            ariaLabel={label}
+            disabled={context.disabled}
+            invalid={issues.length > 0}
+            name={`${toFieldPath(path)}.__branch`}
+            options={branchOptions}
+            required={required}
+            selectedKey={selectedIndex == null ? null : String(selectedIndex)}
+            onBlur={() => context.markTouched(pointer)}
+            onChange={setBranch}
+          />
+          {issues.length ? <SchemaIssueList issues={issues} /> : null}
+        </div>
+        {selected ? renderBranchVariant(selected, path, required, context, options) : null}
+      </FieldsetGroup>
+    </Fieldset>
+  );
+
+  if (options.surface === false) return content;
 
   return (
     <Surface className={`${surfaceClassName} ${branchClassName}`} data-sf-path={pointer} key={pointer} variant="transparent">
-      <Fieldset className={fieldsetClassName}>
-        <FieldsetLegend>{label}</FieldsetLegend>
-        <FieldsetGroup className={`${fieldGroupClassName} ${branchGroupClassName}`}>
-          {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-          <div className={fieldClassName}>
-            <Dropdown
-              ariaLabel={label}
-              disabled={context.disabled}
-              invalid={issues.length > 0}
-              name={`${toFieldPath(path)}.__branch`}
-              options={options}
-              required={required}
-              selectedKey={selectedIndex == null ? null : String(selectedIndex)}
-              onBlur={() => context.markTouched(pointer)}
-              onChange={setBranch}
-            />
-            {issues.length ? <SchemaIssueList issues={issues} /> : null}
-          </div>
-          {selected ? renderBranchVariant(selected, path, required, context) : null}
-        </FieldsetGroup>
-      </Fieldset>
+      {content}
     </Surface>
   );
 }
@@ -636,14 +643,19 @@ function renderBranchVariant<TData>(
   path: PathSegment[],
   required: boolean,
   context: RendererContext<TData>,
+  options: BranchRenderOptions = {},
 ) {
   if (isDisplayOnlySchema(schema)) return renderDisplayOnly(schema, path);
 
   const branch = getBranchSchemas(schema);
-  if (branch) return renderBranch(schema, path, required, branch.branches, context);
+  if (branch) return renderBranch(schema, path, required, branch.branches, context, options);
 
   if (getSchemaType(schema) === "object") {
     return renderObjectFieldset(schema, path, context);
+  }
+
+  if (options.surface === false && isEnumSchema(schema)) {
+    return renderScalarEnum(schema, path, required, context, {surface: false});
   }
 
   return renderSchema(schema, path, required, context);
@@ -937,9 +949,10 @@ function renderScalarEnum<TData>(
   path: PathSegment[],
   required: boolean,
   context: RendererContext<TData>,
+  renderOptions: {surface?: boolean} = {},
 ) {
   const options = schema.enum ?? [];
-  if (options.length < 6) return renderRadioEnum(schema, path, required, options, context);
+  if (options.length < 6) return renderRadioEnum(schema, path, required, options, context, {surface: renderOptions.surface});
   return renderDropdownEnum(schema, path, required, options, context);
 }
 
@@ -949,6 +962,7 @@ function renderRadioEnum<TData>(
   required: boolean,
   options: JsonPrimitive[],
   context: RendererContext<TData>,
+  renderOptions: {surface?: boolean} = {},
 ) {
   const pointer = toPointer(path);
   const label = getLabel(schema, path);
@@ -956,37 +970,43 @@ function renderRadioEnum<TData>(
   const selectedKey = value === undefined ? undefined : enumValueToKey(value);
   const issues = context.getVisibleIssues(pointer);
 
+  const content = (
+    <Fieldset className={fieldsetClassName}>
+      <FieldsetLegend>{label}</FieldsetLegend>
+      <FieldsetGroup className={fieldGroupClassName}>
+        <RadioGroup
+          aria-label={label}
+          className={fieldClassName}
+          isDisabled={context.disabled}
+          isInvalid={issues.length > 0}
+          isReadOnly={context.readOnly}
+          isRequired={required}
+          name={toFieldPath(path)}
+          value={selectedKey}
+          onBlur={() => context.markTouched(pointer)}
+          onChange={(key: string) => context.setFieldValue(path, schema, keyToEnumValue(key, options), required)}
+        >
+          <SchemaFieldHelp description={schema.description} issues={issues} />
+          {options.map((option) => (
+            <Radio key={enumValueToKey(option)} value={enumValueToKey(option)}>
+              <RadioControl>
+                <RadioIndicator />
+              </RadioControl>
+              <RadioContent>
+                <Label>{optionLabel(option)}</Label>
+              </RadioContent>
+            </Radio>
+          ))}
+        </RadioGroup>
+      </FieldsetGroup>
+    </Fieldset>
+  );
+
+  if (renderOptions.surface === false) return content;
+
   return (
     <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
-      <Fieldset className={fieldsetClassName}>
-        <FieldsetLegend>{label}</FieldsetLegend>
-        <FieldsetGroup className={fieldGroupClassName}>
-          <RadioGroup
-            aria-label={label}
-            className={fieldClassName}
-            isDisabled={context.disabled}
-            isInvalid={issues.length > 0}
-            isReadOnly={context.readOnly}
-            isRequired={required}
-            name={toFieldPath(path)}
-            value={selectedKey}
-            onBlur={() => context.markTouched(pointer)}
-            onChange={(key: string) => context.setFieldValue(path, schema, keyToEnumValue(key, options), required)}
-          >
-            <SchemaFieldHelp description={schema.description} issues={issues} />
-            {options.map((option) => (
-              <Radio key={enumValueToKey(option)} value={enumValueToKey(option)}>
-                <RadioControl>
-                  <RadioIndicator />
-                </RadioControl>
-                <RadioContent>
-                  <Label>{optionLabel(option)}</Label>
-                </RadioContent>
-              </Radio>
-            ))}
-          </RadioGroup>
-        </FieldsetGroup>
-      </Fieldset>
+      {content}
     </Surface>
   );
 }
@@ -1295,6 +1315,18 @@ function getRootSchemaLabel(schema: JsonSchema): string {
 function getBranchSelectorIssues(issues: ValidationIssue[], selectedIndex: number | undefined): ValidationIssue[] {
   if (selectedIndex == null) return issues;
   return issues.filter((issue) => issue.keyword !== "oneOf" && issue.keyword !== "anyOf");
+}
+
+function defaultBranchValue(schema: JsonSchema): JsonPrimitive | Record<string, unknown> | unknown[] | undefined {
+  const defaultValue = defaultValueForSchema(schema);
+  if (defaultValue !== undefined) return defaultValue;
+  if (schema.enum?.length) return schema.enum[0];
+
+  const type = getSchemaType(schema);
+  if (type === "null") return null;
+  if (type === "string") return "";
+  if (type === "number" || type === "integer") return schema.minimum ?? 0;
+  return undefined;
 }
 
 function applyBranchSelections(

@@ -89,7 +89,7 @@ describe("SchematicForm", () => {
 
     expect(screen.getByRole("radio", {name: "Internal"}).closest(".schematic-form__surface")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", {name: "Figma"}).closest(".schematic-form__surface")).toBeInTheDocument();
-    expect(container.querySelector(".schematic-form__form")).toHaveClass("flex", "flex-col", "gap-0");
+    expect(container.querySelector(".schematic-form__form")).toHaveClass("flex", "flex-col", "gap-3");
     expect(container.querySelector(".schematic-form__field-group")).toHaveClass("flex", "flex-col", "gap-0");
   });
 
@@ -459,6 +459,53 @@ describe("SchematicForm", () => {
     expect(screen.getByRole("button", {name: /remove/i})).toBeInTheDocument();
   });
 
+  test("renders mixed oneOf array items in one row surface and preserves rows when switching branches", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: /add mixed item/i}));
+
+    expect(container.querySelectorAll('.schematic-form__surface[data-sf-path="/mixedItems/0"]')).toHaveLength(1);
+    const item = getSurface(container, "/mixedItems/0");
+    expect(item.children[0]).toHaveClass("schematic-form__fieldset");
+    expect(item.children[0]).not.toHaveClass("schematic-form__branch");
+    expect(within(item).getByRole("button", {name: /object mixed item #1/i})).toBeInTheDocument();
+    const branchGroup = item.querySelector(".schematic-form__branch-group");
+    expect(branchGroup).toHaveClass("space-y-4");
+    expect(item.querySelector(".schematic-form__row-actions")).toHaveClass("mt-4");
+
+    await user.click(within(item).getByRole("button", {name: /object mixed item #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Enum string"}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({mixedItems: ["Alpha"]});
+    });
+    const updatedBranchGroup = item.querySelector(".schematic-form__branch-group");
+    expect(item.querySelector(".schematic-form__row-actions")?.previousElementSibling).toBe(item.children[0]);
+    expect(updatedBranchGroup?.lastElementChild).toHaveClass("schematic-form__fieldset");
+    expect(getSurface(container, "/mixedItems/0")).toBeInTheDocument();
+
+    await user.click(within(item).getByRole("button", {name: /enum string mixed item #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Null"}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({mixedItems: [null]});
+    });
+    expect(getSurface(container, "/mixedItems/0")).toBeInTheDocument();
+
+    await user.click(within(item).getByRole("button", {name: /null mixed item #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Boolean"}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({mixedItems: [false]});
+    });
+    expect(getSurface(container, "/mixedItems/0")).toBeInTheDocument();
+  });
+
   test("falls back to indexed Item labels for array items without titles", async () => {
     const user = userEvent.setup();
     const schema = {
@@ -498,7 +545,7 @@ describe("SchematicForm", () => {
     const itemSurface = getSurface(container, "/milestones/0");
     const actions = itemSurface.querySelector(".schematic-form__row-actions");
     expect(actions).toBeInTheDocument();
-    expect(actions).toHaveClass("grid", "grid-cols-3", "gap-1");
+    expect(actions).toHaveClass("mt-4", "grid", "grid-cols-3", "gap-1");
 
     for (const name of [/move up/i, /move down/i]) {
       const button = within(actions as HTMLElement).getByRole("button", {name});
