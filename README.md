@@ -1,4 +1,4 @@
-# SchematicForm
+# SchematicForm with HeroUI
 
 SchematicForm is a React-first JSON Schema form renderer built with HeroUI v3. You give it a supported JSON Schema-shaped object, and it renders a working form, tracks form data, validates with Ajv, and can optionally save unfinished drafts in browser storage.
 
@@ -158,7 +158,7 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 
 Unsupported or intentionally ignored in Beta:
 
-- `uiSchema`
+- custom for fields styles and formatting
 - true `anyOf` semantics
 - `dependencies`, `dependentRequired`, `dependentSchemas`
 - `if`, `then`, `else`
