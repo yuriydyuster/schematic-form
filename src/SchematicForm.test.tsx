@@ -584,7 +584,7 @@ describe("SchematicForm", () => {
     const branch = getSurface(container, "/payment");
     const branchField = branch.querySelector(".schematic-form__field");
     const branchTrigger = branchField?.querySelector(".select__trigger");
-    const branchDescription = within(branch).getByText("Branching uses a dropdown and anyOf is intentionally treated as oneOf in V1.");
+    const branchDescription = within(branch).getByText("Branching uses a dropdown and anyOf is intentionally treated as oneOf in Beta.");
 
     expect(branchField).toHaveClass("flex", "flex-col", "gap-1");
     expect(branchTrigger).toBeInTheDocument();

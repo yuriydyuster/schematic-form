@@ -4,7 +4,7 @@ import {createSchemaValidator, sanitizeSchemaForValidation} from "./validation";
 import type {JsonSchema} from "./types";
 
 describe("validation", () => {
-  test("sanitizes V1-only schema behavior before Ajv compilation", () => {
+  test("sanitizes Beta-only schema behavior before Ajv compilation", () => {
     const schema = {
       type: "object",
       required: ["display", "choice"],

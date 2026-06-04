@@ -179,7 +179,7 @@ export const kitchenSinkSchema = {
     },
     payment: {
       title: "Payment method",
-      description: "Branching uses a dropdown and anyOf is intentionally treated as oneOf in V1.",
+      description: "Branching uses a dropdown and anyOf is intentionally treated as oneOf in Beta.",
       anyOf: [
         {
           type: "object",

@@ -1,10 +1,10 @@
-# SchematicForm V1 Implementation Plan
+# SchematicForm Beta Implementation Plan
 
 ## Summary
 
-Build SchematicForm as a greenfield React-first component library using HeroUI v3, React 19, Tailwind CSS v4, TypeScript, Vite library mode, Ajv validation, Vitest/React Testing Library, Chrome DevTools MCP browser acceptance tests, and Storybook.
+Build SchematicForm as a greenfield React-first component library using HeroUI v3, React 19, Tailwind CSS v4, TypeScript, Vite library mode, Ajv validation, Vitest/React Testing Library, browser acceptance tests, and Storybook.
 
-V1 will target a working publishable package and local demo, but will not include npm publishing automation yet.
+Beta will target a working publishable package and local demo, but will not include npm publishing automation yet.
 
 - Default package name: `@schematic-form/react`
 - Default license: Apache-2.0
@@ -16,7 +16,7 @@ V1 will target a working publishable package and local demo, but will not includ
 - Add HeroUI v3 dependencies with runtime peer dependencies for `react`, `react-dom`, and `@heroui/react`.
 - Document Tailwind v4 style setup, including import order: `tailwindcss` before `@heroui/styles`.
 - Use Ajv as the validation engine with `ajv-formats`, `allErrors: true`, schema validation enabled, and strict handling for unsupported schema keywords.
-- Do not introduce `uiSchema` in V1; renderer behavior is derived from JSON Schema fields and the explicit SchematicForm rules in this plan.
+- Do not introduce `uiSchema` in Beta; renderer behavior is derived from JSON Schema fields and the explicit SchematicForm rules in this plan.
 - Render every field at `width: 100%` of the available container width.
 - Wrap every object and array level in a same-level HeroUI `Surface` using the transparent variant, with nested objects and arrays also wrapped in a `Fieldset` for that level.
 
@@ -50,12 +50,12 @@ export type SchematicFormProps<TData = unknown> = {
 };
 ```
 
-V1 public state must always include `data`, `isValid`, and `errors[]`.
+Beta public state must always include `data`, `isValid`, and `errors[]`.
 
 ## Implementation
 
 - Create schema normalization and render-model layers for `object`, `array`, `string`, `number`, `integer`, `boolean`, `null`, `enum`, `required`, supported formats, basic constraints, `oneOf`, `anyOf`, `propertyOrdering`, and array `uniqueItems` for enum string arrays.
-- Ignore all branching/dependency logic not explicitly included in V1. Do not implement `dependencies`, `dependentRequired`, `dependentSchemas`, `if`/`then`/`else`, or advanced `allOf` behavior in this release.
+- Ignore all branching/dependency logic not explicitly included in Beta. Do not implement `dependencies`, `dependentRequired`, `dependentSchemas`, `if`/`then`/`else`, or advanced `allOf` behavior in this release.
 - Resolve labels from `title` first and property-key fallback second.
 - Render fields in object insertion order unless `propertyOrdering` is present; when present, render listed keys first in that order, then render unlisted keys in their original object order.
 - Show `description` above its field or group whenever present.
@@ -74,7 +74,7 @@ V1 public state must always include `data`, `isValid`, and `errors[]`.
   - array of enum strings with fewer than 6 options -> `CheckboxGroup`
   - array of enum strings with 6 or more options -> multiselect dropdown
   - dropdown-selected values -> rendered by the HeroUI select value only; no separate `TagGroup`
-  - `oneOf` and `anyOf` -> dropdown branch selector using branch titles; treat `anyOf` as `oneOf` for V1
+  - `oneOf` and `anyOf` -> dropdown branch selector using branch titles; treat `anyOf` as `oneOf` for Beta
 - Respect `uniqueItems` only for arrays whose `items` are enum strings.
 - Keep validation separate from rendering:
   - Ajv determines validity.
@@ -118,7 +118,7 @@ V1 public state must always include `data`, `isValid`, and `errors[]`.
   - dropdown selections render through the HeroUI select value without separate tags
   - integer min/max fields render as horizontal sliders
   - controlled and uncontrolled modes both emit `onStateChange`
-- Chrome DevTools MCP browser acceptance tests:
+- Browser acceptance tests:
   - demo page loads
   - invalid submit focuses first invalid field
   - array rows can be added, edited, reordered, and removed
@@ -142,8 +142,8 @@ V1 public state must always include `data`, `isValid`, and `errors[]`.
 
 - Use `npm` unless the repo is later initialized with another package manager.
 - Use Vitest instead of Jest because this is a greenfield Vite library.
-- Use HeroUI v3 React components directly; no custom elements in V1.
-- Treat schemas as trusted application input for V1.
-- Treat `anyOf` as `oneOf` intentionally in V1.
+- Use HeroUI v3 React components directly; no custom elements in Beta.
+- Treat schemas as trusted application input for Beta.
+- Treat `anyOf` as `oneOf` intentionally in Beta.
 - Treat the multiline default for unformatted strings with `maxLength < 256` or unspecified literally as requested.
 - Treat `propertyOrdering` and display-only `type: "null"` dummy fields as SchematicForm-supported schema conventions that must be documented.

@@ -1,10 +1,12 @@
-# Chrome DevTools MCP Acceptance Checks
+# Chrome DevTools MCP Manual Acceptance Checks
 
-This document describes manual browser acceptance for the local SchematicForm demo. These checks complement Vitest coverage; they are useful for real browser focus behavior, layout, HeroUI popovers, and console/network inspection.
+This document describes manual browser acceptance and agent debugging for the local SchematicForm demo. These checks complement Vitest and Playwright coverage; they are useful for exploratory focus behavior, layout, HeroUI popovers, and console/network inspection.
 
-## Current Status
+## Tool Roles
 
-`npm run test:acceptance` starts the Vite dev server only. It does not run automated assertions or exit with pass/fail status. Treat the checklist below as a manual agent workflow.
+- Playwright owns repo-automated browser acceptance through `npm run test:acceptance`.
+- Chrome DevTools MCP owns manual agent inspection, snapshots, console reads, network reads, and exploratory debugging.
+- Do not use a normal user Chrome tab as MCP evidence.
 
 ## Start The Demo
 
@@ -60,7 +62,7 @@ Verify these behaviors in the MCP-controlled page:
 - Milestone row move and remove actions preserve sibling values.
 - `Payment method` branch selection switches between titled `anyOf` branches.
 - `Fulfillment path` branch selection switches between titled `oneOf` branches.
-- V1 behavior treats `anyOf` as `oneOf`: only the selected branch is active and validated.
+- Beta behavior treats `anyOf` as `oneOf`: only the selected branch is active and validated.
 - Mixed `oneOf` array items can switch between object, enum string, null, and boolean variants.
 - Previously entered inactive branch values restore when switching back, but inactive values do not appear in submitted data.
 - Dropdown selected values render through the HeroUI select value. There is no separate SchematicForm tag group.

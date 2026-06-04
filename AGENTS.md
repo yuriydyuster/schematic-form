@@ -35,15 +35,17 @@ The package is not a full application. `demo/` is a local playground, `src/sampl
 - Typecheck/lint: `npm run lint`
 - Build package: `npm run build`
 - Build Storybook: `npm run build:storybook`
+- Install browser test binaries: `npm run test:acceptance:install`
+- Run automated browser acceptance: `npm run test:acceptance`
 
-`npm run test:acceptance` currently starts the Vite dev server only. It does not run an automated browser assertion suite.
+`npm run test:acceptance` runs Playwright against the local Vite demo and exits with pass/fail status. Chrome DevTools MCP remains the manual agent inspection tool.
 
 ## Development Rules
 
 - Prefer existing architecture and helper modules over adding new abstractions.
 - Keep schema interpretation, validation sanitization, path mutation, persistence, and branch metadata in their current modules unless there is a strong reason to move them.
 - Do not introduce `uiSchema` or advanced JSON Schema behavior without updating architecture docs, README, tests, and a plan.
-- Treat `anyOf` as `oneOf` in V1.
+- Treat `anyOf` as `oneOf` in Beta.
 - Keep display-only `type: "null"` fields out of public data and validation.
 - Preserve controlled form semantics: `value` is the source of truth and persistence must not hydrate over it.
 - Persistence must stay best-effort; storage errors should not break the form.
@@ -60,11 +62,13 @@ Use focused tests for the affected layer:
 - Path utilities: update `src/paths.test.ts`.
 - Array branch metadata: update `src/branchMetadata.test.ts`.
 
-Run at least `npm test` for behavioral changes and `npm run lint` for TypeScript-facing changes. For docs-only edits, `git diff --check` is usually enough unless the docs describe behavior that should be verified against tests.
+Run at least `npm test` for behavioral changes and `npm run lint` for TypeScript-facing changes. Run `npm run test:acceptance` when real browser behavior, focus, popovers, layout, or draft reloads are affected.
 
 ## Chrome DevTools MCP Usage
 
-Use Chrome DevTools MCP for browser acceptance checks. Do not rely on manually opened user browser tabs for MCP evidence.
+Use Chrome DevTools MCP for manual browser inspection and agent debugging. Do not use it as the repo-owned automated browser test runner; `npm run test:acceptance` owns that role through Playwright.
+
+Do not rely on manually opened user browser tabs for MCP evidence.
 
 Proper workflow:
 

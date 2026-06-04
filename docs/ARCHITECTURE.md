@@ -16,6 +16,7 @@ The package name is `@schematic-form/react`. It builds ESM, CommonJS, TypeScript
 - Gravity UI icons are used for row actions and reset affordances.
 - Vite builds both the local demo and library package.
 - Vitest, jsdom, React Testing Library, and user-event cover automated tests.
+- Playwright covers automated real-browser acceptance against the local demo.
 
 ## Public Entry Points
 
@@ -33,7 +34,7 @@ The package name is `@schematic-form/react`. It builds ESM, CommonJS, TypeScript
 - `src/paths.ts` provides immutable nested data updates and JSON Pointer/field-path conversion.
 - `src/persistence.ts` stores and restores versioned draft payloads in browser storage or a custom storage adapter.
 - `src/branchMetadata.ts` rebases branch selection and branch value cache pointers when array rows are inserted, removed, or moved.
-- `src/sampleSchemas.ts` contains demo and test schemas that exercise supported V1 behavior.
+- `src/sampleSchemas.ts` contains demo and test schemas that exercise supported Beta behavior.
 - `tests/setup.ts` installs jsdom browser API shims required by HeroUI and React Testing Library tests.
 
 ## Runtime Data Flow
@@ -49,7 +50,7 @@ The package name is `@schematic-form/react`. It builds ESM, CommonJS, TypeScript
 
 ## Supported Business Rules
 
-SchematicForm V1 intentionally supports a bounded JSON Schema subset plus a few local conventions:
+SchematicForm Beta intentionally supports a bounded JSON Schema subset plus a few local conventions:
 
 - Root form label and root heading use schema `name` first, then `title`.
 - `propertyOrdering` renders listed object keys first, followed by remaining schema property order.
@@ -60,7 +61,7 @@ SchematicForm V1 intentionally supports a bounded JSON Schema subset plus a few 
 - Scalar enums with fewer than six options render as radios. Scalar enums with six or more options render as dropdowns.
 - Arrays of string enums with fewer than six options render as checkbox groups. Arrays of string enums with six or more options render as multiselect dropdowns.
 - Generic arrays render repeatable rows with add, move, and remove actions. `maxItems` disables adding when the limit is reached.
-- `oneOf` and `anyOf` render as a branch dropdown using branch titles. V1 treats `anyOf` as `oneOf`.
+- `oneOf` and `anyOf` render as a branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`.
 - Inactive branch values are cached internally so users can switch back without leaking inactive values into submitted data.
 - `uniqueItems` is enforced for arrays whose item schema is a string enum.
 - Empty strings are removed from data unless the schema explicitly sets `minLength: 0`.
@@ -71,7 +72,7 @@ Validation is separated from rendering. `validation.ts` sanitizes the schema bef
 
 - Display-only `null` properties are removed from validation and from `required`.
 - `anyOf` is converted to `oneOf`.
-- `propertyOrdering`, `allOf`, `dependencies`, `dependentRequired`, `dependentSchemas`, `if`, `then`, and `else` are ignored in V1.
+- `propertyOrdering`, `allOf`, `dependencies`, `dependentRequired`, `dependentSchemas`, `if`, `then`, and `else` are ignored in Beta.
 - Unsupported string formats are removed before Ajv sees the schema.
 - Ajv runs with `allErrors: true`, strict mode, schema validation, and a custom `time` format.
 
@@ -116,18 +117,20 @@ Automated tests run with Vitest in jsdom:
 - `src/persistence.test.ts` covers draft payload parsing, fingerprints, and storage adapters.
 - `src/paths.test.ts` covers immutable path utilities.
 - `src/branchMetadata.test.ts` covers array pointer rebasing for branch metadata.
+- `tests/browser/` covers real-browser acceptance with Playwright.
 
-Browser acceptance is documented in `docs/acceptance/chrome-devtools-mcp.md`. The current `test:acceptance` npm script starts the Vite server only; it does not automate a pass/fail browser test.
+Browser acceptance has two roles. `npm run test:acceptance` runs the automated Playwright suite with pass/fail status. Chrome DevTools MCP is documented in `docs/acceptance/chrome-devtools-mcp.md` for manual agent inspection and debugging.
 
 ## Build And Distribution
 
 - `npm run dev` starts the demo app.
 - `npm run test` runs automated Vitest tests.
+- `npm run test:acceptance` runs automated Playwright browser acceptance tests.
 - `npm run lint` and `npm run typecheck` run TypeScript with `--noEmit`.
 - `npm run build` emits declarations through TypeScript and bundles the library with Vite library mode.
 - Peer dependencies are `react`, `react-dom`, `@heroui/react`, and `@heroui/styles`.
 
-## Deliberate Non-Goals In V1
+## Deliberate Non-Goals In Beta
 
 - No `uiSchema`.
 - No true `anyOf` semantics.

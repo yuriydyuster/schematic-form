@@ -132,7 +132,7 @@ export function ProfileForm() {
 
 ## Supported Schema Behavior
 
-SchematicForm V1 intentionally supports a clear subset of JSON Schema:
+SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 
 | Schema feature | Rendered behavior |
 | --- | --- |
@@ -153,10 +153,10 @@ SchematicForm V1 intentionally supports a clear subset of JSON Schema:
 | Array of string enum with fewer than six options | Checkbox group. |
 | Array of string enum with six or more options | Multiselect dropdown. |
 | `type: "null"` | Display-only title/description block, excluded from form data. |
-| `oneOf` / `anyOf` | Branch dropdown using branch titles. V1 treats `anyOf` as `oneOf`. |
+| `oneOf` / `anyOf` | Branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`. |
 | `propertyOrdering` | Local convention for field order within objects. |
 
-Unsupported or intentionally ignored in V1:
+Unsupported or intentionally ignored in Beta:
 
 - `uiSchema`
 - true `anyOf` semantics
@@ -197,7 +197,7 @@ Ajv is the validation engine. SchematicForm sanitizes the schema before validati
 - Display-only `type: "null"` properties are excluded.
 - `anyOf` is validated as `oneOf`.
 - Unsupported string formats are ignored.
-- Dependency and conditional keywords are ignored in V1.
+- Dependency and conditional keywords are ignored in Beta.
 
 Public state always has this shape:
 
@@ -220,11 +220,20 @@ type SchematicFormState<TData = unknown> = {
 | `npm run typecheck` | Same TypeScript check as `lint`. |
 | `npm run build` | Builds declarations and the library bundle. |
 | `npm run build:storybook` | Builds static Storybook output. |
-| `npm run test:acceptance` | Starts the Vite server for manual browser acceptance; it does not run automated assertions. |
+| `npm run dev:acceptance` | Starts the Vite server for manual browser acceptance. |
+| `npm run test:acceptance:install` | Installs the Chromium browser binary used by Playwright. |
+| `npm run test:acceptance` | Runs automated Playwright browser acceptance tests against the demo. |
 
 ## Browser Acceptance
 
-Manual browser acceptance uses Chrome DevTools MCP against the local Vite demo. The reliable flow is:
+Automated browser acceptance uses Playwright because it is a repo-owned npm test runner that can start the demo, launch a browser, assert behavior, and exit with pass/fail status:
+
+```bash
+npm run test:acceptance:install
+npm run test:acceptance
+```
+
+Chrome DevTools MCP is still useful for manual agent inspection against the local Vite demo. The reliable flow is:
 
 1. Start the demo with `npm run dev`.
 2. Use Chrome DevTools MCP to create or select an MCP-controlled page for the local URL.
@@ -250,7 +259,9 @@ src/
 demo/
   main.tsx                Local demo app
 tests/
+  browser/                Playwright acceptance tests
   setup.ts                jsdom browser API shims
+playwright.config.ts      Browser acceptance test configuration
 docs/
   ARCHITECTURE.md         Architecture notes
   acceptance/             Browser acceptance notes
