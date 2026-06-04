@@ -8,7 +8,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
     dts({
-      exclude: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.stories.tsx"],
+      include: ["src"],
+      exclude: ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.stories.tsx", "src/sampleSchemas.ts"],
       insertTypesEntry: true,
     }),
   ],

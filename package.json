@@ -1,9 +1,25 @@
 {
   "name": "@schematic-form/react",
-  "version": "0.0.0-development",
+  "version": "0.1.0-beta.0",
   "description": "React-first JSON Schema form renderer built with HeroUI v3.",
   "license": "Apache-2.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deuster/schematic-form.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deuster/schematic-form/issues"
+  },
+  "homepage": "https://github.com/deuster/schematic-form#readme",
+  "keywords": [
+    "react",
+    "json-schema",
+    "forms",
+    "heroui",
+    "ajv",
+    "typescript"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,13 +36,20 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
   "sideEffects": [
     "./dist/styles.css",
     "./src/styles.css"
   ],
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "build": "npm run clean && tsc -p tsconfig.build.json && vite build",
+    "clean": "node -e \"import('node:fs').then(({rmSync}) => rmSync('dist', {recursive: true, force: true}))\"",
     "build:storybook": "HOME=.cache/storybook STORYBOOK_DISABLE_TELEMETRY=1 storybook build",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",

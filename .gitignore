@@ -8,4 +8,11 @@ coverage
 playwright-report
 test-results
 *.log
+.env
+.env.*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.turbo
 deep-research-report.md

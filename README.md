@@ -1,8 +1,8 @@
-# SchematicForm with HeroUI
+# SchematicForm
 
 SchematicForm is a React-first JSON Schema form renderer built with HeroUI v3. You give it a supported JSON Schema-shaped object, and it renders a working form, tracks form data, validates with Ajv, and can optionally save unfinished drafts in browser storage.
 
-This repository is the component library package `@schematic-form/react`. The demo app exists only to exercise the library locally.
+This repository contains the component library package `@schematic-form/react`. The local demo app exists to exercise and test the library during development.
 
 ## What It Does
 
@@ -14,45 +14,6 @@ SchematicForm helps application teams turn a data contract into a form without w
 - It supports controlled and uncontrolled React usage.
 - It can persist uncontrolled drafts to `localStorage`, `sessionStorage`, or a custom storage adapter.
 - It keeps `oneOf` and `anyOf` branch choices user-friendly by using dropdown selectors.
-
-## Quick Start For This Repo
-
-Prerequisites:
-
-- Node.js compatible with Vite 7, such as Node 20.19+ or a current Node 22+ release.
-- npm.
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Run the local demo:
-
-```bash
-npm run dev
-```
-
-Open the local Vite URL printed in the terminal, usually `http://127.0.0.1:5173/`.
-
-Run automated tests:
-
-```bash
-npm test
-```
-
-Typecheck:
-
-```bash
-npm run lint
-```
-
-Build the library:
-
-```bash
-npm run build
-```
 
 ## Installing The Package In An App
 
@@ -113,6 +74,45 @@ export function ProfileForm() {
 }
 ```
 
+## Quick Start For Contributors
+
+Prerequisites:
+
+- Node.js compatible with Vite 7, such as Node 20.19+ or a current Node 22+ release.
+- npm.
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Run the local demo:
+
+```bash
+npm run dev
+```
+
+Open the local Vite URL printed in the terminal, usually `http://127.0.0.1:5173/`.
+
+Run automated tests:
+
+```bash
+npm test
+```
+
+Typecheck:
+
+```bash
+npm run lint
+```
+
+Build the library:
+
+```bash
+npm run build
+```
+
 ## Main Props
 
 | Prop | Purpose |
@@ -158,7 +158,7 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 
 Unsupported or intentionally ignored in Beta:
 
-- custom for fields styles and formatting
+- custom field styling and formatting
 - true `anyOf` semantics
 - `dependencies`, `dependentRequired`, `dependentSchemas`
 - `if`, `then`, `else`
@@ -224,25 +224,14 @@ type SchematicFormState<TData = unknown> = {
 | `npm run test:acceptance:install` | Installs the Chromium browser binary used by Playwright. |
 | `npm run test:acceptance` | Runs automated Playwright browser acceptance tests against the demo. |
 
-## Browser Acceptance
-
-Automated browser acceptance uses Playwright because it is a repo-owned npm test runner that can start the demo, launch a browser, assert behavior, and exit with pass/fail status:
+## Package Verification
 
 ```bash
-npm run test:acceptance:install
-npm run test:acceptance
+npm run lint
+npm test
+npm run build
+npm pack --dry-run
 ```
-
-Chrome DevTools MCP is still useful for manual agent inspection against the local Vite demo. The reliable flow is:
-
-1. Start the demo with `npm run dev`.
-2. Use Chrome DevTools MCP to create or select an MCP-controlled page for the local URL.
-3. Use MCP snapshots and snapshot `uid` values for clicks and form input.
-4. Read console and network state from the selected MCP page before reporting results.
-
-Do not use an ordinary user Chrome tab as acceptance evidence. If Chrome opens a normal tab instead of a browser window marked as controlled by automation, create/select a Chrome DevTools MCP page and rerun the check there.
-
-Detailed steps live in `docs/acceptance/chrome-devtools-mcp.md`.
 
 ## Project Structure
 
@@ -271,5 +260,9 @@ docs/
 ## More Documentation
 
 - `docs/ARCHITECTURE.md` describes module boundaries, data flow, validation, persistence, and testing architecture.
-- `docs/acceptance/chrome-devtools-mcp.md` describes browser acceptance and correct Chrome DevTools MCP usage.
+- `docs/acceptance/chrome-devtools-mcp.md` describes manual browser acceptance for maintainers.
 - `docs/plans/` contains deferred implementation plans.
+
+## License
+
+Apache-2.0
