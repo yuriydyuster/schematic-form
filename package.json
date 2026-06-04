@@ -6,12 +6,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deuster/schematic-form.git"
+    "url": "https://github.com/yuriydyuster/schematic-form"
   },
   "bugs": {
-    "url": "https://github.com/deuster/schematic-form/issues"
+    "url": "https://github.com/yuriydyuster/schematic-form/issues"
   },
-  "homepage": "https://github.com/deuster/schematic-form#readme",
+  "homepage": "https://github.com/yuriydyuster/schematic-form#readme",
   "keywords": [
     "react",
     "json-schema",
