@@ -1,6 +1,6 @@
 {
   "name": "@schematic-form/react",
-  "version": "0.1.0-beta",
+  "version": "0.1.0-beta.1",
   "description": "React-first JSON Schema form renderer built with HeroUI v3.",
   "license": "Apache-2.0",
   "type": "module",
