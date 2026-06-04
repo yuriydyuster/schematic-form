@@ -26,6 +26,8 @@ export {
 export type {
   FieldRenderContext,
   JsonSchema,
+  SchematicFormDraftStorage,
+  SchematicFormPersistenceOptions,
   SchematicFormProps,
   SchematicFormState,
   SupportedStringFormat,

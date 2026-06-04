@@ -1,5 +1,5 @@
 import * as HeroUI from "@heroui/react";
-import {ArrowDown, ArrowUp, Plus, TrashBin} from "@gravity-ui/icons";
+import {ArrowDown, ArrowRotateLeft, ArrowUp, Plus, TrashBin} from "@gravity-ui/icons";
 import {
   getLocalTimeZone,
   parseAbsoluteToLocal,
@@ -10,8 +10,11 @@ import {
 import type {DateValue, Time} from "@internationalized/date";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
+import type {ArrayPointerRebaseOperation} from "./branchMetadata";
+import {rebaseArrayPointerRecord} from "./branchMetadata";
 import {
   deleteAtPath,
+  fromPointer,
   getAtPath,
   insertArrayItem,
   moveArrayItem,
@@ -20,6 +23,16 @@ import {
   toFieldPath,
   toPointer,
 } from "./paths";
+import type {BranchValueCache, SchematicFormDraftPayload} from "./persistence";
+import {
+  cloneDraftValue,
+  createDraftPayload,
+  createSchemaFingerprint,
+  readDraftPayload,
+  removeDraftPayload,
+  resolveDraftStorage,
+  writeDraftPayload,
+} from "./persistence";
 import {
   canAddArrayItem,
   defaultArrayItemValue,
@@ -44,6 +57,7 @@ import type {
   JsonPrimitive,
   JsonSchema,
   PathSegment,
+  SchematicFormDraftStorage,
   SchematicFormProps,
   SchematicFormState,
   ValidationIssue,
@@ -135,6 +149,7 @@ const defaultMessages = {
   moveUp: "Move up",
   moveDown: "Move down",
   remove: "Remove",
+  reset: "Reset",
   submit: "Submit",
   errorSummaryTitle: "Please review the highlighted fields.",
   selectOption: "Select an option",
@@ -149,6 +164,12 @@ const fieldGroupClassName = `schematic-form__field-group flex flex-col ${fieldGa
 const branchClassName = `schematic-form__branch flex flex-col ${fieldGapClassName}`;
 const branchGroupClassName = `schematic-form__branch-group ${schemaSectionSpacingClassName}`;
 type BranchRenderOptions = {surface?: boolean};
+type DraftSaveTarget = {
+  storage: SchematicFormDraftStorage;
+  key: string;
+  payload: SchematicFormDraftPayload;
+};
+type BranchSelectionState = Record<string, number | null>;
 
 export function SchematicForm<TData = unknown>({
   schema,
@@ -162,6 +183,7 @@ export function SchematicForm<TData = unknown>({
   className,
   readOnly = false,
   disabled = false,
+  persistence,
   fieldRenderer,
   errorFormatter,
 }: SchematicFormProps<TData>) {
@@ -174,11 +196,24 @@ export function SchematicForm<TData = unknown>({
   const [internalData, setInternalData] = useState<unknown>(initialData);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [branchSelection, setBranchSelection] = useState<Record<string, number>>({});
+  const [branchSelection, setBranchSelection] = useState<BranchSelectionState>({});
+  const [branchValueCache, setBranchValueCache] = useState<BranchValueCache>({});
   const [rowIdsByPointer, setRowIdsByPointer] = useState<Record<string, string[]>>({});
   const rowIdCounter = useRef(0);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const draftSaveTimeoutRef = useRef<number | null>(null);
+  const latestDraftRef = useRef<DraftSaveTarget | null>(null);
   const isControlled = value !== undefined;
+  const shouldPersistDraft = persistence != null && !isControlled;
+  const draftStorage = useMemo(
+    () => (shouldPersistDraft ? resolveDraftStorage(persistence.storage) : null),
+    [persistence?.storage, shouldPersistDraft],
+  );
+  const draftKey = persistence?.key ?? "";
+  const draftDebounceMs = persistence?.debounceMs ?? 250;
+  const clearPersistedDraftOnValidSubmit = persistence?.clearOnValidSubmit ?? true;
+  const schemaFingerprint = useMemo(() => createSchemaFingerprint(jsonSchema), [jsonSchema]);
+  const [draftHydrated, setDraftHydrated] = useState(!shouldPersistDraft);
   const data = (isControlled ? value : internalData) as unknown;
   const validationSchema = useMemo(
     () => applyBranchSelections(jsonSchema, branchSelection),
@@ -202,9 +237,90 @@ export function SchematicForm<TData = unknown>({
     [data, validation.errors, validation.isValid],
   );
 
+  const clearScheduledDraftSave = useCallback(() => {
+    if (draftSaveTimeoutRef.current == null) return;
+    window.clearTimeout(draftSaveTimeoutRef.current);
+    draftSaveTimeoutRef.current = null;
+  }, []);
+
+  const flushLatestDraft = useCallback(() => {
+    clearScheduledDraftSave();
+    const latest = latestDraftRef.current;
+    if (!latest) return;
+    writeDraftPayload(latest.storage, latest.key, latest.payload);
+  }, [clearScheduledDraftSave]);
+
   useEffect(() => {
+    if (!shouldPersistDraft) {
+      latestDraftRef.current = null;
+      setDraftHydrated(true);
+      return;
+    }
+
+    setDraftHydrated(false);
+    if (!draftStorage || !draftKey) {
+      setDraftHydrated(true);
+      return;
+    }
+
+    const draft = readDraftPayload(draftStorage, draftKey, schemaFingerprint);
+    if (draft) {
+      setInternalData(restoreEmptyBranchSelectionValues(draft.data, draft.branchSelection));
+      setBranchSelection(draft.branchSelection);
+      setBranchValueCache(draft.branchValueCache);
+    }
+    setDraftHydrated(true);
+  }, [draftKey, draftStorage, schemaFingerprint, shouldPersistDraft]);
+
+  useEffect(() => {
+    if (!shouldPersistDraft || !draftHydrated || !draftStorage || !draftKey) {
+      latestDraftRef.current = null;
+      clearScheduledDraftSave();
+      return;
+    }
+
+    const payload = createDraftPayload({
+      schemaFingerprint,
+      data,
+      branchSelection,
+      branchValueCache,
+    });
+    latestDraftRef.current = {storage: draftStorage, key: draftKey, payload};
+
+    clearScheduledDraftSave();
+    draftSaveTimeoutRef.current = window.setTimeout(() => {
+      writeDraftPayload(draftStorage, draftKey, payload);
+      if (latestDraftRef.current?.payload === payload) draftSaveTimeoutRef.current = null;
+    }, Math.max(0, draftDebounceMs));
+
+    return clearScheduledDraftSave;
+  }, [
+    branchSelection,
+    branchValueCache,
+    clearScheduledDraftSave,
+    data,
+    draftDebounceMs,
+    draftHydrated,
+    draftKey,
+    draftStorage,
+    schemaFingerprint,
+    shouldPersistDraft,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("pagehide", flushLatestDraft);
+    return () => {
+      window.removeEventListener("pagehide", flushLatestDraft);
+      flushLatestDraft();
+    };
+  }, [flushLatestDraft]);
+
+  useEffect(() => {
+    if (!draftHydrated) return;
     onStateChange?.(publicState);
-  }, [onStateChange, publicState]);
+  }, [draftHydrated, onStateChange, publicState]);
 
   const commitData = useCallback(
     (nextData: unknown) => {
@@ -261,10 +377,43 @@ export function SchematicForm<TData = unknown>({
         window.setTimeout(() => focusFirstIssue(formRef.current, validation.issues), 0);
       }
 
+      if (validation.isValid && clearPersistedDraftOnValidSubmit && draftStorage && draftKey) {
+        clearScheduledDraftSave();
+        latestDraftRef.current = null;
+        removeDraftPayload(draftStorage, draftKey);
+      }
+
       onSubmit?.(nextState, event);
     },
-    [data, onSubmit, validation.errors, validation.isValid, validation.issues],
+    [
+      clearPersistedDraftOnValidSubmit,
+      clearScheduledDraftSave,
+      data,
+      draftKey,
+      draftStorage,
+      onSubmit,
+      validation.errors,
+      validation.isValid,
+      validation.issues,
+    ],
   );
+
+  const handleReset = useCallback(() => {
+    setTouched({});
+    setSubmitted(false);
+    setBranchSelection({});
+    setBranchValueCache({});
+    setRowIdsByPointer({});
+    rowIdCounter.current = 0;
+
+    if (draftStorage && draftKey) {
+      clearScheduledDraftSave();
+      latestDraftRef.current = null;
+      removeDraftPayload(draftStorage, draftKey);
+    }
+
+    commitData(initialData);
+  }, [clearScheduledDraftSave, commitData, draftKey, draftStorage, initialData]);
 
   const context: RendererContext<TData> = {
     data,
@@ -279,8 +428,14 @@ export function SchematicForm<TData = unknown>({
     rowIdsByPointer,
     setBranchSelection,
     branchSelection,
+    setBranchValueCache,
+    branchValueCache,
     setFieldValue,
     setRowIdsByPointer,
+    rebaseBranchMetadata(arrayPointer, operation) {
+      setBranchSelection((current) => rebaseArrayPointerRecord(current, arrayPointer, operation));
+      setBranchValueCache((current) => rebaseArrayPointerRecord(current, arrayPointer, operation));
+    },
     commitData,
     makeRowId() {
       rowIdCounter.current += 1;
@@ -301,8 +456,12 @@ export function SchematicForm<TData = unknown>({
           <ErrorSummary title={mergedMessages.errorSummaryTitle} errors={validation.errors} />
         ) : null}
         {renderSchema(jsonSchema, [], false, context)}
-        <div className="schematic-form__form-actions flex flex-wrap gap-1">
-          <Button isDisabled={disabled} type="submit">
+        <div className="schematic-form__form-actions grid grid-cols-2 gap-1">
+          <Button fullWidth isDisabled={disabled} type="button" variant="secondary" onPress={handleReset}>
+            <ButtonIcon icon={ArrowRotateLeft} />
+            {mergedMessages.reset}
+          </Button>
+          <Button fullWidth isDisabled={disabled} type="submit">
             {mergedMessages.submit}
           </Button>
         </div>
@@ -322,10 +481,13 @@ type RendererContext<TData> = {
   markTouched(pointer: string): void;
   messages: typeof defaultMessages;
   rowIdsByPointer: Record<string, string[]>;
-  setBranchSelection: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  branchSelection: Record<string, number>;
+  setBranchSelection: React.Dispatch<React.SetStateAction<BranchSelectionState>>;
+  branchSelection: BranchSelectionState;
+  setBranchValueCache: React.Dispatch<React.SetStateAction<BranchValueCache>>;
+  branchValueCache: BranchValueCache;
   setFieldValue(path: PathSegment[], schema: JsonSchema, value: unknown, required: boolean): void;
   setRowIdsByPointer: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  rebaseBranchMetadata(arrayPointer: string, operation: ArrayPointerRebaseOperation): void;
   commitData(data: unknown): void;
   makeRowId(): string;
 };
@@ -441,12 +603,18 @@ function renderArray<TData>(
   const items = Array.isArray(value) ? value : [];
   const rowIds = getRowIds(context, pointer, items.length);
   const canAdd = canAddArrayItem(schema, items.length);
-  const itemSchema = schema.items ?? {};
+  const itemSchema = getSingleArrayItemSchema(schema) ?? {};
   const itemLabel = getLabel(itemSchema, [...path, 0], label);
 
   const addItem = () => {
     if (!canAdd) return;
-    const newItem = defaultArrayItemValue(schema);
+    const isBranchItem = getBranchSchemas(itemSchema) != null;
+    const newItem = isBranchItem ? undefined : defaultArrayItemValue(schema);
+    const newItemPointer = toPointer([...path, items.length]);
+    context.rebaseBranchMetadata(pointer, {type: "insert", index: items.length});
+    if (isBranchItem) {
+      context.setBranchSelection((current) => ({...current, [newItemPointer]: null}));
+    }
     context.commitData(insertArrayItem(context.data, path, items.length, newItem));
     context.setRowIdsByPointer((current) => ({
       ...current,
@@ -456,6 +624,7 @@ function renderArray<TData>(
 
   const removeItem = (index: number) => {
     const ids = getRowIds(context, pointer, items.length);
+    context.rebaseBranchMetadata(pointer, {type: "remove", index});
     context.commitData(removeArrayItem(context.data, path, index));
     context.setRowIdsByPointer((current) => ({
       ...current,
@@ -465,6 +634,7 @@ function renderArray<TData>(
 
   const moveItem = (from: number, to: number) => {
     const ids = getRowIds(context, pointer, items.length);
+    context.rebaseBranchMetadata(pointer, {type: "move", from, to});
     context.commitData(moveArrayItem(context.data, path, from, to));
     const nextIds = [...ids];
     const [id] = nextIds.splice(from, 1);
@@ -567,7 +737,10 @@ function renderBranch<TData>(
 ) {
   const pointer = toPointer(path);
   const label = getLabel(schema, path, "Option");
-  const selectedIndex = context.branchSelection[pointer] ?? getDefaultBranchIndex(schema, branches);
+  const hasBranchSelection = Object.prototype.hasOwnProperty.call(context.branchSelection, pointer);
+  const selectedIndex = hasBranchSelection
+    ? context.branchSelection[pointer] ?? undefined
+    : getDefaultBranchIndex(schema, branches);
   const selected = selectedIndex == null ? undefined : branches[selectedIndex];
   const issues = getBranchSelectorIssues(context.getVisibleIssues(pointer), selectedIndex);
   const branchOptions = branches.map((branch, index) => ({
@@ -578,9 +751,27 @@ function renderBranch<TData>(
   const setBranch = (key: string) => {
     const nextIndex = Number(key);
     if (!Number.isInteger(nextIndex) || !branches[nextIndex]) return;
+    if (nextIndex === selectedIndex) return;
+
+    const nextCacheForPointer = {...(context.branchValueCache[pointer] ?? {})};
+    if (selectedIndex != null) {
+      nextCacheForPointer[String(selectedIndex)] = cloneDraftValue(getAtPath(context.data, path));
+    }
+
+    const cachedKey = String(nextIndex);
+    const hasCachedValue = Object.prototype.hasOwnProperty.call(nextCacheForPointer, cachedKey);
+    const nextValue = hasCachedValue
+      ? cloneDraftValue(nextCacheForPointer[cachedKey])
+      : defaultBranchValue(branches[nextIndex]);
+    context.setBranchValueCache((current) => ({
+      ...current,
+      [pointer]: {
+        ...(current[pointer] ?? {}),
+        ...nextCacheForPointer,
+      },
+    }));
     context.setBranchSelection((current) => ({...current, [pointer]: nextIndex}));
-    const nextDefault = defaultBranchValue(branches[nextIndex]);
-    const nextData = nextDefault === undefined ? deleteAtPath(context.data, path) : setAtPath(context.data, path, nextDefault);
+    const nextData = nextValue === undefined ? deleteAtPath(context.data, path) : setAtPath(context.data, path, nextValue);
     context.commitData(nextData);
     window.setTimeout(() => focusFirstNestedField(context.formRef.current, pointer), 0);
   };
@@ -598,6 +789,8 @@ function renderBranch<TData>(
             options={branchOptions}
             required={required}
             selectedKey={selectedIndex == null ? null : String(selectedIndex)}
+            className="schematic-form__branch-selector"
+            variant="secondary"
             onBlur={() => context.markTouched(pointer)}
             onChange={setBranch}
           />
@@ -1048,7 +1241,7 @@ function renderStringEnumArray<TData>(
   required: boolean,
   context: RendererContext<TData>,
 ) {
-  const options = (schema.items?.enum ?? []).filter((value): value is string => typeof value === "string");
+  const options = (getSingleArrayItemSchema(schema)?.enum ?? []).filter((value): value is string => typeof value === "string");
   if (options.length < 6) return renderCheckboxEnumArray(schema, path, required, options, context);
   return renderMultiselectEnumArray(schema, path, required, options, context);
 }
@@ -1156,6 +1349,8 @@ function Dropdown({
   required,
   selectedKey,
   selectedKeys,
+  className,
+  variant,
   onBlur,
   onChange,
   onMultipleChange,
@@ -1170,6 +1365,8 @@ function Dropdown({
   required?: boolean;
   selectedKey?: string | null;
   selectedKeys?: Set<string>;
+  className?: string;
+  variant?: "primary" | "secondary";
   onBlur?: () => void;
   onChange?: (key: string) => void;
   onMultipleChange?: (keys: Set<string>) => void;
@@ -1177,7 +1374,7 @@ function Dropdown({
   return (
     <Select
       aria-label={ariaLabel ?? label}
-      className="schematic-form__control"
+      className={["schematic-form__control", className].filter(Boolean).join(" ")}
       fullWidth
       isDisabled={disabled}
       isInvalid={invalid}
@@ -1185,8 +1382,9 @@ function Dropdown({
       name={name}
       placeholder="Select an option"
       selectedKey={multiple ? undefined : selectedKey ?? null}
-      selectedKeys={multiple ? selectedKeys ?? new Set<string>() : undefined}
       selectionMode={multiple ? "multiple" : "single"}
+      variant={variant}
+      value={multiple ? [...(selectedKeys ?? new Set<string>())] : undefined}
       onBlur={onBlur}
       onChange={(event: unknown) => {
         if (!multiple) return;
@@ -1317,6 +1515,17 @@ function getBranchSelectorIssues(issues: ValidationIssue[], selectedIndex: numbe
   return issues.filter((issue) => issue.keyword !== "oneOf" && issue.keyword !== "anyOf");
 }
 
+function restoreEmptyBranchSelectionValues(data: unknown, branchSelection: BranchSelectionState): unknown {
+  return Object.entries(branchSelection).reduce((nextData, [pointer, selectedIndex]) => {
+    if (selectedIndex !== null) return nextData;
+    return setAtPath(nextData, fromPointer(pointer), undefined);
+  }, data);
+}
+
+function getSingleArrayItemSchema(schema: JsonSchema): JsonSchema | undefined {
+  return schema.items && !Array.isArray(schema.items) ? schema.items : undefined;
+}
+
 function defaultBranchValue(schema: JsonSchema): JsonPrimitive | Record<string, unknown> | unknown[] | undefined {
   const defaultValue = defaultValueForSchema(schema);
   if (defaultValue !== undefined) return defaultValue;
@@ -1331,12 +1540,15 @@ function defaultBranchValue(schema: JsonSchema): JsonPrimitive | Record<string, 
 
 function applyBranchSelections(
   schema: JsonSchema,
-  selections: Record<string, number>,
+  selections: BranchSelectionState,
   path: PathSegment[] = [],
 ): JsonSchema {
   const branch = getBranchSchemas(schema);
   if (branch) {
-    const selectedIndex = selections[toPointer(path)] ?? getDefaultBranchIndex(schema, branch.branches);
+    const pointer = toPointer(path);
+    const selectedIndex = Object.prototype.hasOwnProperty.call(selections, pointer)
+      ? selections[pointer] ?? undefined
+      : getDefaultBranchIndex(schema, branch.branches);
     const selected = selectedIndex == null ? undefined : branch.branches[selectedIndex];
     if (selected) return applyBranchSelections(selected, selections, path);
   }
@@ -1353,7 +1565,19 @@ function applyBranchSelections(
   }
 
   if (schema.items) {
-    output.items = applyBranchSelections(schema.items, selections, [...path, 0]);
+    if (Array.isArray(schema.items)) {
+      output.items = schema.items.map((child, index) => applyBranchSelections(child, selections, [...path, index]));
+    } else {
+      const selectedArrayItemCount = getSelectedArrayItemCount(selections, path);
+      if (selectedArrayItemCount > 0) {
+        output.items = Array.from({length: selectedArrayItemCount}, (_, index) =>
+          applyBranchSelections(schema.items as JsonSchema, selections, [...path, index]),
+        );
+        output.additionalItems = applyAdditionalArrayItemSchema(schema, selections, path, selectedArrayItemCount);
+      } else {
+        output.items = applyBranchSelections(schema.items, selections, [...path, 0]);
+      }
+    }
   }
 
   if (Array.isArray(schema.oneOf)) {
@@ -1365,6 +1589,39 @@ function applyBranchSelections(
   }
 
   return output;
+}
+
+function getSelectedArrayItemCount(selections: BranchSelectionState, path: PathSegment[]): number {
+  const pointer = toPointer(path);
+  const prefix = pointer === "/" ? "/" : `${pointer}/`;
+  let highestIndex = -1;
+
+  for (const selectionPointer of Object.keys(selections)) {
+    if (!selectionPointer.startsWith(prefix)) continue;
+    const [rawIndex] = selectionPointer.slice(prefix.length).split("/");
+    if (!/^(?:0|[1-9]\d*)$/.test(rawIndex)) continue;
+    highestIndex = Math.max(highestIndex, Number(rawIndex));
+  }
+
+  return highestIndex + 1;
+}
+
+function applyAdditionalArrayItemSchema(
+  schema: JsonSchema,
+  selections: BranchSelectionState,
+  path: PathSegment[],
+  index: number,
+): boolean | JsonSchema {
+  if (schema.additionalItems === false || schema.additionalItems === true) return schema.additionalItems;
+  if (isSchemaObject(schema.additionalItems)) {
+    return applyBranchSelections(schema.additionalItems, selections, [...path, index]);
+  }
+  const itemSchema = getSingleArrayItemSchema(schema);
+  return itemSchema ? applyBranchSelections(itemSchema, selections, [...path, index]) : true;
+}
+
+function isSchemaObject(value: unknown): value is JsonSchema {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function focusFirstIssue(form: HTMLFormElement | null, issues: ValidationIssue[]) {
@@ -1487,7 +1744,7 @@ function formatToInputType(format: ReturnType<typeof getSupportedFormat>): strin
 }
 
 function normalizeStringEnumArray(values: string[], schema: JsonSchema): string[] {
-  const allowed = new Set((schema.items?.enum ?? []).filter((item): item is string => typeof item === "string"));
+  const allowed = new Set((getSingleArrayItemSchema(schema)?.enum ?? []).filter((item): item is string => typeof item === "string"));
   const filtered = values.filter((value) => allowed.has(value));
   if (!schema.uniqueItems) return filtered;
   return [...new Set(filtered)];

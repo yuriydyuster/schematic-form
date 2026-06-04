@@ -28,7 +28,8 @@ export type JsonSchema = {
   properties?: Record<string, JsonSchema>;
   required?: string[];
   propertyOrdering?: string[];
-  items?: JsonSchema;
+  items?: JsonSchema | JsonSchema[];
+  additionalItems?: boolean | JsonSchema;
   minItems?: number;
   maxItems?: number;
   uniqueItems?: boolean;
@@ -65,6 +66,15 @@ export type SchematicFormState<TData = unknown> = {
   errors: string[];
 };
 
+export type SchematicFormDraftStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export type SchematicFormPersistenceOptions = {
+  key: string;
+  storage?: "localStorage" | "sessionStorage" | SchematicFormDraftStorage;
+  debounceMs?: number;
+  clearOnValidSubmit?: boolean;
+};
+
 export type FieldRenderContext = {
   schema: JsonSchema;
   path: PathSegment[];
@@ -89,6 +99,7 @@ export type SchematicFormProps<TData = unknown> = {
   className?: string;
   readOnly?: boolean;
   disabled?: boolean;
+  persistence?: SchematicFormPersistenceOptions;
   fieldRenderer?: (ctx: FieldRenderContext) => React.ReactNode;
   errorFormatter?: (issue: ValidationIssue) => string;
 };

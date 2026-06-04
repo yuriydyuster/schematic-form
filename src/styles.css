@@ -59,3 +59,9 @@
 .schematic-form__button-icon {
   flex: 0 0 auto;
 }
+
+.schematic-form__branch-selector.select--secondary[data-invalid="true"] .select__trigger,
+.schematic-form__branch-selector.select--secondary[aria-invalid="true"] .select__trigger {
+  background-color: var(--select-trigger-bg, var(--default));
+  box-shadow: none;
+}

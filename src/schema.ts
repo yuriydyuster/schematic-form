@@ -100,7 +100,7 @@ export function isEnumSchema(schema: JsonSchema): boolean {
 }
 
 export function isArrayOfStringEnum(schema: JsonSchema): boolean {
-  const itemSchema = schema.items;
+  const itemSchema = getSingleItemSchema(schema);
   if (!itemSchema || !Array.isArray(itemSchema.enum)) return false;
   return itemSchema.enum.every((item) => typeof item === "string");
 }
@@ -137,15 +137,20 @@ export function defaultValueForSchema(schema: JsonSchema): JsonValue | undefined
 }
 
 export function defaultArrayItemValue(schema: JsonSchema): JsonValue | undefined {
-  if (!schema.items) return undefined;
-  const explicit = defaultValueForSchema(schema.items);
+  const itemSchema = getSingleItemSchema(schema);
+  if (!itemSchema) return undefined;
+  const explicit = defaultValueForSchema(itemSchema);
   if (explicit !== undefined) return explicit;
 
-  const type = getSchemaType(schema.items);
+  const type = getSchemaType(itemSchema);
   if (type === "object") return {};
   if (type === "array") return [];
   if (type === "boolean") return false;
   return undefined;
+}
+
+function getSingleItemSchema(schema: JsonSchema): JsonSchema | undefined {
+  return schema.items && !Array.isArray(schema.items) ? schema.items : undefined;
 }
 
 export function enumValueToKey(value: JsonPrimitive): string {

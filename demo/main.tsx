@@ -13,6 +13,7 @@ function App() {
       <section className="demo-form">
         <SchematicForm
           schema={kitchenSinkSchema}
+          persistence={{key: "schematic-form:kitchen-sink-demo"}}
           validationMode="hybrid"
           onStateChange={(nextState) => setState(nextState)}
           onSubmit={(nextState) => {

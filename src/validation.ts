@@ -28,6 +28,7 @@ export function createSchemaValidator(
   const ajv = new Ajv({
     allErrors: true,
     strict: true,
+    strictTuples: false,
     validateSchema: true,
   });
   addFormats(ajv);
@@ -97,9 +98,25 @@ export function sanitizeSchemaForValidation(schema: JsonSchema): JsonSchema | bo
       continue;
     }
     if (key === "required") continue;
-    if (key === "items" && isSchema(value)) {
-      const sanitizedItems = sanitizeSchemaForValidation(value);
-      output.items = sanitizedItems === true ? {} : (sanitizedItems as JsonSchema);
+    if (key === "items") {
+      if (Array.isArray(value)) {
+        output.items = value.map((item) => {
+          const sanitizedItem = sanitizeSchemaForValidation(item as JsonSchema);
+          return sanitizedItem === true ? {} : (sanitizedItem as JsonSchema);
+        });
+      } else if (isSchema(value)) {
+        const sanitizedItems = sanitizeSchemaForValidation(value);
+        output.items = sanitizedItems === true ? {} : (sanitizedItems as JsonSchema);
+      }
+      continue;
+    }
+    if (key === "additionalItems") {
+      if (isSchema(value)) {
+        const sanitizedAdditionalItems = sanitizeSchemaForValidation(value);
+        output.additionalItems = sanitizedAdditionalItems === true ? {} : (sanitizedAdditionalItems as JsonSchema);
+      } else {
+        output.additionalItems = value as boolean;
+      }
       continue;
     }
     output[key] = value;
