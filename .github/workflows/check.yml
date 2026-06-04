@@ -1,0 +1,95 @@
+name: Publish to npm manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag to publish with"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - latest
+      dry_run:
+        description: "Only check package, do not publish"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Build and publish to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js for npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck --if-present
+
+      - name: Run tests
+        run: npm test --if-present
+
+      - name: Build package
+        run: npm run build --if-present
+
+      - name: Show package metadata
+        run: |
+          echo "Package name:"
+          node -p "require('./package.json').name"
+          echo "Package version:"
+          node -p "require('./package.json').version"
+          echo "Selected npm tag:"
+          echo "${{ inputs.npm_tag }}"
+          echo "Dry run:"
+          echo "${{ inputs.dry_run }}"
+
+      - name: Prevent prerelease from being published as latest
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${{ inputs.npm_tag }}"
+
+          echo "Version: $VERSION"
+          echo "Tag: $TAG"
+
+          if [[ "$VERSION" == *-* && "$TAG" == "latest" ]]; then
+            echo "Error: prerelease version must not be published with npm tag 'latest'."
+            echo "Use tag 'beta' for versions like 0.1.0-beta.1."
+            exit 1
+          fi
+
+      - name: Check npm authentication
+        run: npm whoami --registry=https://registry.npmjs.org
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Check package contents
+        run: npm pack --dry-run
+
+      - name: Dry run publish check
+        if: ${{ inputs.dry_run }}
+        run: npm publish --access public --tag "${{ inputs.npm_tag }}" --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        if: ${{ !inputs.dry_run }}
+        run: npm publish --access public --tag "${{ inputs.npm_tag }}" --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
