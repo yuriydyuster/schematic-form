@@ -2,6 +2,8 @@
 
 ## Summary
 
+Status: implemented.
+
 Normalize styling in `src/SchematicForm.tsx` by centralizing class strings into one local class map and using a small local class combiner. This is a code-organization refactor only: rendered classes, visual behavior, semantic `schematic-form__*` hooks, and the public API should remain unchanged.
 
 The goal is to replace the current mix of module-level constants, inline literals, template strings, and repeated `.filter(Boolean).join(" ")` expressions with one consistent implementation pattern.

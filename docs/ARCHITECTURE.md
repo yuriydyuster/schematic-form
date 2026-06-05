@@ -89,7 +89,10 @@ The component renders with HeroUI React components and keeps SchematicForm CSS t
 - Object and generic array levels render transparent HeroUI `Surface` wrappers with same-level `Fieldset` structure.
 - Complex groups use `Fieldset`, `Legend`, and description/error slots where possible.
 - The form uses `validationBehavior="aria"` so JSON Schema validation remains the source of truth.
+- `SchematicForm.tsx` owns render-role class composition through the local `sfClasses` map and `cx(...)` helper. Add or change Tailwind utilities there instead of scattering inline class strings through JSX.
+- Keep stable `schematic-form__*` semantic selectors on rendered structure because tests and consumer CSS may target them.
 - `src/styles.css` imports styles in this order: Tailwind CSS, HeroUI styles, then SchematicForm rules.
+- Keep `src/styles.css` for package-level custom CSS rules and selector fixes; do not move Tailwind layout ownership between TSX and CSS without updating this architecture note and style-sensitive tests.
 
 HeroUI v3 API compatibility is handled in `SchematicForm.tsx` through component aliases and small fallbacks. Keep this compatibility layer local unless a repeated pattern proves it needs extraction.
 

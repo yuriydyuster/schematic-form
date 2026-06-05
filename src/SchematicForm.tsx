@@ -159,15 +159,38 @@ const defaultMessages = {
   selectOption: "Select an option",
 };
 
-const surfaceClassName = "schematic-form__surface rounded-xl border p-3";
-const fieldClassName = "schematic-form__field flex flex-col gap-1";
-const fieldGapClassName = "gap-0";
-const schemaSectionSpacingClassName = "space-y-4";
-const fieldsetClassName = `schematic-form__fieldset flex flex-col ${fieldGapClassName}`;
-const fieldGroupClassName = `schematic-form__field-group flex flex-col ${fieldGapClassName}`;
-const branchClassName = `schematic-form__branch flex flex-col ${fieldGapClassName}`;
-const branchGroupClassName = `schematic-form__branch-group ${schemaSectionSpacingClassName}`;
-const requiredLabelClassName = "schematic-form__required-label";
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
+const sfClasses = {
+  root: "schematic-form",
+  form: "schematic-form__form flex flex-col gap-3",
+  formActions: "schematic-form__form-actions grid grid-cols-2 gap-1",
+  surface: "schematic-form__surface rounded-xl border p-3",
+  fieldset: "schematic-form__fieldset flex flex-col gap-0",
+  fieldGroup: "schematic-form__field-group flex flex-col gap-0",
+  field: "schematic-form__field flex flex-col gap-1",
+  control: "schematic-form__control",
+  array: "schematic-form__array flex flex-col gap-2",
+  arrayItems: "schematic-form__array-items flex flex-col gap-2",
+  arrayRowSurface: "schematic-form__surface rounded-xl border p-3 schematic-form__array-row flex flex-col gap-2",
+  rowActions: "schematic-form__row-actions mt-4 grid grid-cols-3 gap-1",
+  arrayActions: "schematic-form__array-actions flex flex-col gap-1",
+  branchSurface: "schematic-form__surface rounded-xl border p-3 schematic-form__branch flex flex-col gap-0",
+  branchGroup: "schematic-form__branch-group space-y-4",
+  branchSelector: "schematic-form__branch-selector",
+  requiredLabel: "schematic-form__required-label",
+  sliderEmpty: "schematic-form__slider--empty",
+  sliderOutputEmpty: "schematic-form__slider-output--empty",
+  sliderHeader: "schematic-form__slider-header flex items-center justify-between gap-1",
+  switchRow: "schematic-form__switch-row flex items-center justify-between gap-2",
+  description: "schematic-form__description",
+  buttonIcon: "schematic-form__button-icon",
+  fieldIcon: "schematic-form__field-icon size-4 text-muted",
+  errorMessage: "schematic-form__error-message",
+  errorSummary: "schematic-form__error-summary",
+} as const;
 type BranchRenderOptions = {surface?: boolean};
 type DraftSaveTarget = {
   storage: SchematicFormDraftStorage;
@@ -459,11 +482,11 @@ export function SchematicForm<TData = unknown>({
   };
 
   return (
-    <div className={["schematic-form", className].filter(Boolean).join(" ")}>
+    <div className={cx(sfClasses.root, className)}>
       <Form
         ref={formRef}
         aria-label={formLabel || "Schematic form"}
-        className={`schematic-form__form flex flex-col gap-3`}
+        className={sfClasses.form}
         validationBehavior="aria"
         onSubmit={handleSubmit}
       >
@@ -471,7 +494,7 @@ export function SchematicForm<TData = unknown>({
           <ErrorSummary title={mergedMessages.errorSummaryTitle} errors={validation.errors} />
         ) : null}
         {renderSchema(jsonSchema, [], false, context)}
-        <div className="schematic-form__form-actions grid grid-cols-2 gap-1">
+        <div className={sfClasses.formActions}>
           <Button fullWidth isDisabled={disabled || isSubmitting} type="button" variant="secondary" onPress={handleReset}>
             <ButtonIcon icon={ArrowRotateLeft} />
             {mergedMessages.reset}
@@ -542,7 +565,7 @@ function renderSchema<TData>(
 
   if (custom !== undefined) {
     return (
-      <div className={fieldClassName} data-sf-path={pointer} key={pointer}>
+      <div className={sfClasses.field} data-sf-path={pointer} key={pointer}>
         {custom}
       </div>
     );
@@ -563,7 +586,7 @@ function renderObject<TData>(schema: JsonSchema, path: PathSegment[], context: R
   const pointer = toPointer(path);
 
   return (
-    <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
+    <Surface className={sfClasses.surface} data-sf-path={pointer} key={pointer} variant="transparent">
       {renderObjectFieldset(schema, path, context, {root: path.length === 0})}
     </Surface>
   );
@@ -580,7 +603,7 @@ function renderObjectFieldset<TData>(
   const required = new Set(schema.required ?? []);
 
   return (
-    <Fieldset className={fieldsetClassName}>
+    <Fieldset className={sfClasses.fieldset}>
       {options.root ? (
         <>
           {label ? <TypographyHeading level={2} slot={null}>{label}</TypographyHeading> : null}
@@ -588,7 +611,7 @@ function renderObjectFieldset<TData>(
       ) : (
         label ? <FieldsetLegend>{label}</FieldsetLegend> : null
       )}
-      <FieldsetGroup className={fieldGroupClassName}>
+      <FieldsetGroup className={sfClasses.fieldGroup}>
         {options.root ? (
           schema.description ? (
             <TypographyParagraph color="muted" size="base" slot={null}>
@@ -665,25 +688,25 @@ function renderArray<TData>(
   };
 
   return (
-    <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
-      <Fieldset className={fieldsetClassName}>
+    <Surface className={sfClasses.surface} data-sf-path={pointer} key={pointer} variant="transparent">
+      <Fieldset className={sfClasses.fieldset}>
         <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
-        <FieldsetGroup className={fieldGroupClassName}>
+        <FieldsetGroup className={sfClasses.fieldGroup}>
           <SchemaFieldHelp description={schema.description} issues={issues} />
-          <div className="schematic-form__array flex flex-col gap-2">
-            <div className="schematic-form__array-items flex flex-col gap-2">
+          <div className={sfClasses.array}>
+            <div className={sfClasses.arrayItems}>
               {items.map((_, index) => {
                 const itemPath = [...path, index];
                 const itemPointer = toPointer(itemPath);
                 return (
                   <Surface
-                    className={`${surfaceClassName} schematic-form__array-row flex flex-col gap-2`}
+                    className={sfClasses.arrayRowSurface}
                     data-sf-path={itemPointer}
                     key={rowIds[index] ?? `${pointer}-${index}`}
                     variant="transparent"
                   >
                     {renderArrayItemSchema(withIndexedArrayItemTitle(itemSchema, index), itemPath, context)}
-                    <div className="schematic-form__row-actions mt-4 grid grid-cols-3 gap-1">
+                    <div className={sfClasses.rowActions}>
                       <Button
                         fullWidth
                         isDisabled={context.disabled || index === 0}
@@ -719,7 +742,7 @@ function renderArray<TData>(
                 );
               })}
             </div>
-            <div className="schematic-form__array-actions flex flex-col gap-1">
+            <div className={sfClasses.arrayActions}>
               <Button fullWidth isDisabled={context.disabled || !canAdd} type="button" variant="secondary" onPress={addItem}>
                 <ButtonIcon icon={Plus} />
                 <span>{context.messages.add} {itemLabel}</span>
@@ -802,11 +825,11 @@ function renderBranch<TData>(
     window.setTimeout(() => focusFirstNestedField(context.formRef.current, pointer), 0);
   };
   const content = (
-    <Fieldset className={fieldsetClassName} key={pointer}>
+    <Fieldset className={sfClasses.fieldset} key={pointer}>
       <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
-      <FieldsetGroup className={`${fieldGroupClassName} ${branchGroupClassName}`}>
+      <FieldsetGroup className={cx(sfClasses.fieldGroup, sfClasses.branchGroup)}>
         {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
-        <div className={fieldClassName}>
+        <div className={sfClasses.field}>
           <Dropdown
             ariaLabel={label}
             disabled={context.disabled}
@@ -815,7 +838,7 @@ function renderBranch<TData>(
             options={branchOptions}
             required={required}
             selectedKey={selectedIndex == null ? null : String(selectedIndex)}
-            className="schematic-form__branch-selector"
+            className={sfClasses.branchSelector}
             variant="secondary"
             onBlur={() => context.markTouched(pointer)}
             onChange={setBranch}
@@ -830,7 +853,7 @@ function renderBranch<TData>(
   if (options.surface === false) return content;
 
   return (
-    <Surface className={`${surfaceClassName} ${branchClassName}`} data-sf-path={pointer} key={pointer} variant="transparent">
+    <Surface className={sfClasses.branchSurface} data-sf-path={pointer} key={pointer} variant="transparent">
       {content}
     </Surface>
   );
@@ -840,14 +863,14 @@ function renderDisplayOnly(schema: JsonSchema, path: PathSegment[]) {
   const pointer = toPointer(path);
   return (
     <Fieldset
-      className={fieldsetClassName}
+      className={sfClasses.fieldset}
       data-sf-display-only="true"
       data-sf-path={pointer}
       key={pointer}
     >
       {schema.title ? <FieldsetLegend>{schema.title}</FieldsetLegend> : null}
       {schema.description ? (
-        <FieldsetGroup className={fieldGroupClassName}>
+        <FieldsetGroup className={sfClasses.fieldGroup}>
           <TypographyParagraph color="muted" size="sm" slot={null}>
             {schema.description}
           </TypographyParagraph>
@@ -903,7 +926,7 @@ function renderString<TData>(
 
   return (
     <TextField
-      className={fieldClassName}
+      className={sfClasses.field}
       data-sf-path={pointer}
       fullWidth
       isDisabled={context.disabled}
@@ -921,7 +944,7 @@ function renderString<TData>(
       {suffixIcon ? (
         <InputGroup fullWidth>
           <InputGroupInput
-            className="schematic-form__control"
+            className={sfClasses.control}
             maxLength={schema.maxLength}
             minLength={schema.minLength}
             pattern={schema.pattern}
@@ -933,7 +956,7 @@ function renderString<TData>(
         </InputGroup>
       ) : (
         <Control
-          className="schematic-form__control"
+          className={sfClasses.control}
           maxLength={schema.maxLength}
           minLength={schema.minLength}
           pattern={schema.pattern}
@@ -961,7 +984,7 @@ function renderDatePicker<TData>(
 
   return (
     <DatePicker
-      className={fieldClassName}
+      className={sfClasses.field}
       data-sf-path={pointer}
       granularity={mode === "date-time" ? "minute" : "day"}
       hideTimeZone={mode === "date-time"}
@@ -1032,7 +1055,7 @@ function renderTimeField<TData>(
 
   return (
     <TimeField
-      className={fieldClassName}
+      className={sfClasses.field}
       data-sf-path={pointer}
       fullWidth
       isDisabled={context.disabled}
@@ -1075,7 +1098,7 @@ function renderNumber<TData>(
 
   return (
     <NumberField
-      className={fieldClassName}
+      className={sfClasses.field}
       data-sf-path={pointer}
       fullWidth
       isDisabled={context.disabled}
@@ -1093,7 +1116,7 @@ function renderNumber<TData>(
       <Label>{label}</Label>
       <NumberFieldGroup>
         <NumberFieldDecrementButton />
-        <NumberFieldInput className="schematic-form__control" />
+        <NumberFieldInput className={sfClasses.control} />
         <NumberFieldIncrementButton />
       </NumberFieldGroup>
       <FieldHelp description={schema.description} issues={issues} />
@@ -1119,7 +1142,7 @@ function renderIntegerSlider<TData>(
 
   return (
     <Slider
-      className={[fieldClassName, isUnset ? "schematic-form__slider--empty" : undefined].filter(Boolean).join(" ")}
+      className={cx(sfClasses.field, isUnset && sfClasses.sliderEmpty)}
       data-sf-path={pointer}
       data-sf-empty={isUnset ? "true" : undefined}
       isDisabled={context.disabled}
@@ -1135,9 +1158,9 @@ function renderIntegerSlider<TData>(
         context.setFieldValue(path, schema, !required && nextValue === unsetValue ? undefined : nextValue, required);
       }}
     >
-      <div className="schematic-form__slider-header flex items-center justify-between gap-1">
-        <Label className={required ? requiredLabelClassName : undefined}>{label}</Label>
-        <SliderOutput className={isUnset ? "schematic-form__slider-output--empty" : undefined} />
+      <div className={sfClasses.sliderHeader}>
+        <Label className={required ? sfClasses.requiredLabel : undefined}>{label}</Label>
+        <SliderOutput className={isUnset ? sfClasses.sliderOutputEmpty : undefined} />
       </div>
       <SliderTrack>
         <SliderFill />
@@ -1160,8 +1183,8 @@ function renderBoolean<TData>(
   const issues = context.getVisibleIssues(pointer);
 
   return (
-    <div className={fieldClassName} data-sf-path={pointer} key={pointer}>
-      <div className="schematic-form__switch-row flex items-center justify-between gap-2">
+    <div className={sfClasses.field} data-sf-path={pointer} key={pointer}>
+      <div className={sfClasses.switchRow}>
         <Label>{label}</Label>
         <Switch
           aria-label={label}
@@ -1211,12 +1234,12 @@ function renderRadioEnum<TData>(
   const issues = context.getVisibleIssues(pointer);
 
   const content = (
-    <Fieldset className={fieldsetClassName}>
+    <Fieldset className={sfClasses.fieldset}>
       <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
-      <FieldsetGroup className={fieldGroupClassName}>
+      <FieldsetGroup className={sfClasses.fieldGroup}>
         <RadioGroup
           aria-label={label}
-          className={fieldClassName}
+          className={sfClasses.field}
           isDisabled={context.disabled}
           isInvalid={issues.length > 0}
           isReadOnly={context.readOnly}
@@ -1245,7 +1268,7 @@ function renderRadioEnum<TData>(
   if (renderOptions.surface === false) return content;
 
   return (
-    <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
+    <Surface className={sfClasses.surface} data-sf-path={pointer} key={pointer} variant="transparent">
       {content}
     </Surface>
   );
@@ -1265,7 +1288,7 @@ function renderDropdownEnum<TData>(
   const issues = context.getVisibleIssues(pointer);
 
   return (
-    <div className={fieldClassName} data-sf-path={pointer} key={pointer}>
+    <div className={sfClasses.field} data-sf-path={pointer} key={pointer}>
       <Dropdown
         disabled={context.disabled}
         invalid={issues.length > 0}
@@ -1307,13 +1330,13 @@ function renderCheckboxEnumArray<TData>(
   const issues = context.getVisibleIssues(pointer);
 
   return (
-    <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
-      <Fieldset className={fieldsetClassName}>
+    <Surface className={sfClasses.surface} data-sf-path={pointer} key={pointer} variant="transparent">
+      <Fieldset className={sfClasses.fieldset}>
         <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
-        <FieldsetGroup className={fieldGroupClassName}>
+        <FieldsetGroup className={sfClasses.fieldGroup}>
           <CheckboxGroup
             aria-label={label}
-            className={fieldClassName}
+            className={sfClasses.field}
             isDisabled={context.disabled}
             isInvalid={issues.length > 0}
             isReadOnly={context.readOnly}
@@ -1360,7 +1383,7 @@ function renderMultiselectEnumArray<TData>(
   };
 
   return (
-    <div className={fieldClassName} data-sf-path={pointer} key={pointer}>
+    <div className={sfClasses.field} data-sf-path={pointer} key={pointer}>
       <Dropdown
         disabled={context.disabled}
         invalid={issues.length > 0}
@@ -1421,7 +1444,7 @@ function Dropdown({
   return (
     <Select
       aria-label={ariaLabel ?? label}
-      className={["schematic-form__control", className].filter(Boolean).join(" ")}
+      className={cx(sfClasses.control, className)}
       fullWidth
       isDisabled={disabled}
       isInvalid={invalid}
@@ -1496,12 +1519,12 @@ function RequiredFieldsetLegend({
   children: React.ReactNode;
   required: boolean;
 }) {
-  return <FieldsetLegend className={required ? requiredLabelClassName : undefined}>{children}</FieldsetLegend>;
+  return <FieldsetLegend className={required ? sfClasses.requiredLabel : undefined}>{children}</FieldsetLegend>;
 }
 
 function FieldDescription({children}: {children: React.ReactNode}) {
   return (
-    <Description className="schematic-form__description" data-slot="schema-description" slot="description">
+    <Description className={sfClasses.description} data-slot="schema-description" slot="description">
       {children}
     </Description>
   );
@@ -1518,11 +1541,11 @@ function SchemaFieldHelp({description, issues}: {description?: string; issues: V
 }
 
 function ButtonIcon({icon: Icon}: {icon: GravityIcon}) {
-  return <Icon aria-hidden="true" className="schematic-form__button-icon" focusable="false" />;
+  return <Icon aria-hidden="true" className={sfClasses.buttonIcon} focusable="false" />;
 }
 
 function FieldIcon({icon: Icon}: {icon: GravityIcon}) {
-  return <Icon aria-hidden="true" className="schematic-form__field-icon size-4 text-muted" focusable="false" />;
+  return <Icon aria-hidden="true" className={sfClasses.fieldIcon} focusable="false" />;
 }
 
 function IssueList({issues}: {issues: ValidationIssue[]}) {
@@ -1537,7 +1560,7 @@ function IssueList({issues}: {issues: ValidationIssue[]}) {
 
 function SchemaIssueList({issues}: {issues: ValidationIssue[]}) {
   return (
-    <ErrorMessage className="schematic-form__error-message" data-slot="schema-error-message">
+    <ErrorMessage className={sfClasses.errorMessage} data-slot="schema-error-message">
       {issues.map((issue) => (
         <div key={`${issue.path}-${issue.keyword}`}>{issue.message}</div>
       ))}
@@ -1547,7 +1570,7 @@ function SchemaIssueList({issues}: {issues: ValidationIssue[]}) {
 
 function ErrorSummary({title, errors}: {title: string; errors: string[]}) {
   return (
-    <div className="schematic-form__error-summary" role="alert">
+    <div className={sfClasses.errorSummary} role="alert">
       <Typography slot={null} type="h4">{title}</Typography>
       <ul>
         {errors.map((error) => (
