@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor, within} from "@testing-library/react";
+import {act, fireEvent, render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 
@@ -268,6 +268,79 @@ describe("SchematicForm", () => {
     });
   });
 
+  test("keeps integer slider UI and data state aligned for required and optional fields", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Slider semantics",
+      required: ["requiredPriority"],
+      properties: {
+        requiredPriority: {
+          type: "integer",
+          title: "Required priority",
+          minimum: 1,
+          maximum: 5,
+        },
+        optionalScore: {
+          type: "integer",
+          title: "Optional score",
+          minimum: 1,
+          maximum: 5,
+        },
+        steppedScore: {
+          type: "integer",
+          title: "Stepped score",
+          minimum: 10,
+          maximum: 20,
+          multipleOf: 5,
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+
+    const requiredSlider = container.querySelector('[data-sf-path="/requiredPriority"] input');
+    const optionalSlider = container.querySelector('[data-sf-path="/optionalScore"] input');
+    const steppedSlider = container.querySelector('[data-sf-path="/steppedScore"] input');
+
+    expect(requiredSlider).toHaveAttribute("min", "1");
+    expect(requiredSlider).toHaveValue("1");
+    expect(optionalSlider).toHaveAttribute("min", "0");
+    expect(optionalSlider).toHaveValue("0");
+    expect(steppedSlider).toHaveAttribute("min", "5");
+    expect(steppedSlider).toHaveValue("5");
+    expect(container.querySelector('[data-sf-path="/optionalScore"]')).toHaveAttribute("data-sf-empty", "true");
+    expect(container.querySelector('[data-sf-path="/optionalScore"] .schematic-form__slider-output--empty')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
+    });
+
+    fireEvent.change(optionalSlider as HTMLInputElement, {target: {value: "1"}});
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1, optionalScore: 1});
+    });
+    expect(container.querySelector('[data-sf-path="/optionalScore"]')).not.toHaveAttribute("data-sf-empty");
+
+    fireEvent.change(optionalSlider as HTMLInputElement, {target: {value: "0"}});
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
+    });
+    expect(container.querySelector('[data-sf-path="/optionalScore"]')).toHaveAttribute("data-sf-empty", "true");
+
+    fireEvent.change(steppedSlider as HTMLInputElement, {target: {value: "10"}});
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1, steppedScore: 10});
+    });
+
+    fireEvent.click(screen.getByRole("button", {name: /reset/i}));
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
+    });
+    expect(container.querySelector('[data-sf-path="/optionalScore"] input')).toHaveValue("0");
+    expect(container.querySelector('[data-sf-path="/steppedScore"] input')).toHaveValue("5");
+  });
+
   test("renders boolean fields as switches with labels before the control", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
     const field = container.querySelector('[data-sf-path="/requiresReview"]');
@@ -294,6 +367,7 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Reference URL")).toHaveAttribute("type", "url");
     expect(screen.getByRole("switch", {name: "Requires review"})).toBeInTheDocument();
     expect(screen.getByRole("radio", {name: "Internal"})).toBeInTheDocument();
+    expect(within(container.querySelector('[data-sf-path="/confidence"]') as HTMLElement).getByText("Confidence")).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option status/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option channels/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option review tags/i})).toBeInTheDocument();

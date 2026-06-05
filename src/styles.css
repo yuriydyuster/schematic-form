@@ -65,6 +65,10 @@
   content: " *";
 }
 
+.schematic-form__slider-output--empty {
+  visibility: hidden;
+}
+
 .schematic-form__branch-selector.select--secondary[data-invalid="true"] .select__trigger,
 .schematic-form__branch-selector.select--secondary[aria-invalid="true"] .select__trigger {
   background-color: var(--select-trigger-bg, var(--default));

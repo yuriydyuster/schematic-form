@@ -195,8 +195,8 @@ export function SchematicForm<TData = unknown>({
   const jsonSchema = schema as JsonSchema;
   const mergedMessages = {...defaultMessages, ...messages};
   const initialData = useMemo(() => {
-    if (defaultValue !== undefined) return defaultValue as unknown;
-    return defaultValueForSchema(jsonSchema) ?? {};
+    const baseData = defaultValue !== undefined ? defaultValue as unknown : defaultValueForSchema(jsonSchema) ?? {};
+    return materializeRequiredIntegerSliderValues(jsonSchema, baseData);
   }, [defaultValue, jsonSchema]);
   const [internalData, setInternalData] = useState<unknown>(initialData);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -271,12 +271,13 @@ export function SchematicForm<TData = unknown>({
 
     const draft = readDraftPayload(draftStorage, draftKey, schemaFingerprint);
     if (draft) {
-      setInternalData(restoreEmptyBranchSelectionValues(draft.data, draft.branchSelection));
+      const restoredData = restoreEmptyBranchSelectionValues(draft.data, draft.branchSelection);
+      setInternalData(materializeRequiredIntegerSliderValues(jsonSchema, restoredData));
       setBranchSelection(draft.branchSelection);
       setBranchValueCache(draft.branchValueCache);
     }
     setDraftHydrated(true);
-  }, [draftKey, draftStorage, schemaFingerprint, shouldPersistDraft]);
+  }, [draftKey, draftStorage, jsonSchema, schemaFingerprint, shouldPersistDraft]);
 
   useEffect(() => {
     if (!shouldPersistDraft || !draftHydrated || !draftStorage || !draftKey) {
@@ -341,8 +342,9 @@ export function SchematicForm<TData = unknown>({
       const type = getSchemaType(fieldSchema);
       const shouldDeleteEmptyString = type === "string" && nextValue === "" && fieldSchema.minLength !== 0;
       const shouldDeleteEmptyArray = !required && type === "array" && Array.isArray(nextValue) && nextValue.length === 0;
+      const shouldDeleteUndefined = nextValue === undefined;
       const nextData =
-        shouldDeleteEmptyString || shouldDeleteEmptyArray
+        shouldDeleteUndefined || shouldDeleteEmptyString || shouldDeleteEmptyArray
           ? deleteAtPath(data, path)
           : setAtPath(data, path, nextValue);
       commitData(nextData);
@@ -627,7 +629,9 @@ function renderArray<TData>(
   const addItem = () => {
     if (!canAdd) return;
     const isBranchItem = getBranchSchemas(itemSchema) != null;
-    const newItem = isBranchItem ? undefined : defaultArrayItemValue(schema);
+    const newItem = isBranchItem
+      ? undefined
+      : materializeRequiredIntegerSliderValues(itemSchema, defaultArrayItemValue(schema));
     const newItemPointer = toPointer([...path, items.length]);
     context.rebaseBranchMetadata(pointer, {type: "insert", index: items.length});
     if (isBranchItem) {
@@ -1102,29 +1106,34 @@ function renderIntegerSlider<TData>(
   const pointer = toPointer(path);
   const label = getLabel(schema, path);
   const rawValue = getAtPath(context.data, path);
-  const value = typeof rawValue === "number" ? rawValue : schema.minimum;
+  const step = getIntegerSliderStep(schema);
+  const unsetValue = (schema.minimum ?? 0) - step;
+  const minValue = required ? schema.minimum : unsetValue;
+  const value = typeof rawValue === "number" ? rawValue : minValue;
+  const isUnset = !required && typeof rawValue !== "number";
   const issues = context.getVisibleIssues(pointer);
 
   return (
     <Slider
-      className={fieldClassName}
+      className={[fieldClassName, isUnset ? "schematic-form__slider--empty" : undefined].filter(Boolean).join(" ")}
       data-sf-path={pointer}
+      data-sf-empty={isUnset ? "true" : undefined}
       isDisabled={context.disabled}
       isReadOnly={context.readOnly}
       key={pointer}
       maxValue={schema.maximum}
-      minValue={schema.minimum}
-      step={schema.multipleOf ?? 1}
+      minValue={minValue}
+      step={step}
       value={value}
       onBlur={() => context.markTouched(pointer)}
       onChange={(next: number | number[]) => {
         const nextValue = Array.isArray(next) ? next[0] : next;
-        context.setFieldValue(path, schema, nextValue, required);
+        context.setFieldValue(path, schema, !required && nextValue === unsetValue ? undefined : nextValue, required);
       }}
     >
       <div className="schematic-form__slider-header flex items-center justify-between gap-1">
         <Label className={required ? requiredLabelClassName : undefined}>{label}</Label>
-        <SliderOutput />
+        <SliderOutput className={isUnset ? "schematic-form__slider-output--empty" : undefined} />
       </div>
       <SliderTrack>
         <SliderFill />
@@ -1574,13 +1583,87 @@ function restoreEmptyBranchSelectionValues(data: unknown, branchSelection: Branc
   }, data);
 }
 
+function materializeRequiredIntegerSliderValues(schema: JsonSchema, data: unknown): unknown {
+  if (isDisplayOnlySchema(schema)) return data;
+
+  const branch = getBranchSchemas(schema);
+  if (branch) return data;
+
+  const type = getSchemaType(schema);
+  if (type === "object") return materializeObjectRequiredIntegerSliderValues(schema, data);
+  if (type === "array" && Array.isArray(data)) {
+    const itemSchema = getSingleArrayItemSchema(schema);
+    if (!itemSchema) return data;
+    let nextData = data;
+    data.forEach((item, index) => {
+      const nextItem = materializeRequiredIntegerSliderValues(itemSchema, item);
+      if (nextItem !== item) {
+        if (nextData === data) nextData = [...data];
+        nextData[index] = nextItem;
+      }
+    });
+    return nextData;
+  }
+
+  return data;
+}
+
+function materializeObjectRequiredIntegerSliderValues(schema: JsonSchema, data: unknown): unknown {
+  const source = isRecord(data) ? data : {};
+  let nextData: Record<string, unknown> = source;
+  let changed = false;
+  const required = new Set(schema.required ?? []);
+
+  for (const key of getOrderedPropertyKeys(schema)) {
+    const child = schema.properties?.[key];
+    if (!child || isDisplayOnlySchema(child)) continue;
+
+    const childIsRequired = required.has(key);
+    const hasValue = Object.prototype.hasOwnProperty.call(nextData, key);
+    const currentValue = nextData[key];
+
+    if (childIsRequired && isIntegerSliderSchema(child) && (currentValue === undefined || !hasValue)) {
+      nextData = setObjectKey(nextData, key, child.minimum);
+      changed = true;
+      continue;
+    }
+
+    const shouldRecurse = hasValue || childIsRequired;
+    if (!shouldRecurse) continue;
+
+    const nextValue = materializeRequiredIntegerSliderValues(child, hasValue ? currentValue : undefined);
+    if (nextValue !== currentValue && (nextValue !== undefined || hasValue)) {
+      nextData = setObjectKey(nextData, key, nextValue);
+      changed = true;
+    }
+  }
+
+  return changed ? nextData : data;
+}
+
+function isIntegerSliderSchema(schema: JsonSchema): boolean {
+  return getSchemaType(schema) === "integer" && typeof schema.minimum === "number" && typeof schema.maximum === "number";
+}
+
+function getIntegerSliderStep(schema: JsonSchema): number {
+  return typeof schema.multipleOf === "number" && schema.multipleOf > 0 ? schema.multipleOf : 1;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function setObjectKey(source: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
+  return {...source, [key]: value};
+}
+
 function getSingleArrayItemSchema(schema: JsonSchema): JsonSchema | undefined {
   return schema.items && !Array.isArray(schema.items) ? schema.items : undefined;
 }
 
 function defaultBranchValue(schema: JsonSchema): JsonPrimitive | Record<string, unknown> | unknown[] | undefined {
   const defaultValue = defaultValueForSchema(schema);
-  if (defaultValue !== undefined) return defaultValue;
+  if (defaultValue !== undefined) return materializeRequiredIntegerSliderValues(schema, defaultValue) as JsonPrimitive | Record<string, unknown> | unknown[];
   if (schema.enum?.length) return schema.enum[0];
 
   const type = getSchemaType(schema);
