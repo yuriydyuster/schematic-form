@@ -2,66 +2,96 @@
 @import "@heroui/styles";
 
 .schematic-form {
-  width: 100%;
+  @apply w-full;
 }
 
-.schematic-form__form,
-.schematic-form__surface,
-.schematic-form__fieldset,
-.schematic-form__field,
-.schematic-form__control,
-.schematic-form__array,
-.schematic-form__array-row,
-.schematic-form__branch {
-  width: 100%;
+.schematic-form__form {
+  @apply flex w-full flex-col gap-3;
 }
 
-.schematic-form__form,
-.schematic-form__surface,
-.schematic-form__fieldset,
-.schematic-form__field-group,
-.schematic-form__field,
-.schematic-form__array,
-.schematic-form__array-items,
-.schematic-form__array-row,
-.schematic-form__array-actions,
-.schematic-form__branch {
-  display: flex;
-  flex-direction: column;
+.schematic-form__form-actions {
+  @apply grid grid-cols-2 gap-1;
 }
 
-.schematic-form__field,
-.schematic-form__array-actions {
-  gap: 0.25rem;
+.schematic-form__surface {
+  @apply flex w-full flex-col rounded-xl border p-3;
+}
+
+.schematic-form__fieldset {
+  @apply flex w-full flex-col gap-0;
 }
 
 .schematic-form__field-group {
-  gap: 1rem;
+  @apply flex flex-col gap-4;
 }
 
 .schematic-form__field-group > :not(:last-child) {
   margin-block: 0;
 }
 
+.schematic-form__field {
+  @apply flex w-full flex-col gap-1;
+}
+
+.schematic-form__control {
+  @apply w-full;
+}
+
 .schematic-form__array,
-.schematic-form__array-items,
+.schematic-form__array-items {
+  @apply flex w-full flex-col gap-2;
+}
+
 .schematic-form__array-row {
-  gap: 0.5rem;
+  @apply flex w-full flex-col gap-4;
+}
+
+.schematic-form__row-actions {
+  @apply mt-4 grid grid-cols-3 gap-1;
+}
+
+.schematic-form__array-actions {
+  @apply flex flex-col gap-1;
+}
+
+.schematic-form__branch {
+  @apply flex w-full flex-col gap-0;
+}
+
+.schematic-form__branch-group {
+  @apply space-y-4;
+}
+
+.schematic-form__slider-header,
+.schematic-form__switch-row {
+  @apply flex items-center justify-between;
+}
+
+.schematic-form__slider-header {
+  @apply gap-1;
+}
+
+.schematic-form__switch-row {
+  @apply gap-2;
 }
 
 .schematic-form__error-summary {
-  border: 1px solid var(--color-danger, rgb(220 38 38));
-  border-radius: 0.5rem;
-  color: var(--color-danger, rgb(185 28 28));
-  padding: 0.75rem;
+  @apply rounded-lg border p-3;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .schematic-form__button-icon {
-  flex: 0 0 auto;
+  @apply shrink-0;
+}
+
+.schematic-form__field-icon {
+  @apply size-4;
+  color: var(--muted);
 }
 
 .schematic-form__required-label::after {
-  color: var(--color-danger, rgb(220 38 38));
+  color: var(--color-danger);
   content: " *";
 }
 

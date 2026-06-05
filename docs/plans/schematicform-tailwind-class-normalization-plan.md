@@ -2,7 +2,7 @@
 
 ## Summary
 
-Status: implemented.
+Status: superseded by `docs/plans/schematicform-semantic-tailwind-css-plan.md`.
 
 Normalize styling in `src/SchematicForm.tsx` by centralizing class strings into one local class map and using a small local class combiner. This is a code-organization refactor only: rendered classes, visual behavior, semantic `schematic-form__*` hooks, and the public API should remain unchanged.
 

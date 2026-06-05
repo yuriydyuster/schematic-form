@@ -49,7 +49,8 @@ The package is not a full application. `demo/` is a local playground, `src/sampl
 - Keep display-only `type: "null"` fields out of public data and validation.
 - Preserve controlled form semantics: `value` is the source of truth and persistence must not hydrate over it.
 - Persistence must stay best-effort; storage errors should not break the form.
-- Keep `SchematicForm.tsx` styling centralized in the local `sfClasses` map and `cx(...)` helper; do not reintroduce scattered inline Tailwind class strings.
+- Keep `SchematicForm.tsx` class names semantic-only with direct `schematic-form__*` selectors; use the local `cx(...)` helper only for conditional state classes or caller-provided `className`.
+- Keep SchematicForm layout and visual styling in `src/styles.css` using Tailwind `@apply` and HeroUI theme tokens where possible; do not reintroduce Tailwind utility strings into `SchematicForm.tsx`.
 - Preserve stable `schematic-form__*` selectors because tests and consumer CSS may target them.
 - When a bug is discovered but the user requested documentation-only work, create a plan under `docs/plans/` instead of changing runtime code.
 
