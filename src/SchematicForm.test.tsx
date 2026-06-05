@@ -156,6 +156,107 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Email").tagName).toBe("INPUT");
   });
 
+  test("renders formatted email and uri fields with InputGroup suffix icons", () => {
+    const schema = {
+      type: "object",
+      title: "Formatted fields",
+      properties: {
+        email: {
+          type: "string",
+          title: "Email",
+          format: "email",
+        },
+        website: {
+          type: "string",
+          title: "Website",
+          format: "uri",
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} />);
+
+    expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
+    expect(screen.getByLabelText("Website")).toHaveAttribute("type", "url");
+    expect(container.querySelector('[data-sf-path="/email"] .input-group__suffix .schematic-form__field-icon')).toBeInTheDocument();
+    expect(container.querySelector('[data-sf-path="/website"] .input-group__suffix .schematic-form__field-icon')).toBeInTheDocument();
+  });
+
+  test("applies schema defaults across supported field types", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Defaults",
+      properties: {
+        shortText: {type: "string", title: "Short text", default: "Ada"},
+        longText: {type: "string", title: "Long text", maxLength: 256, default: "Long default"},
+        email: {type: "string", title: "Email", format: "email", default: "ada@example.com"},
+        website: {type: "string", title: "Website", format: "uri", default: "https://example.com"},
+        dueDate: {type: "string", title: "Due date", format: "date", default: "2026-06-05"},
+        dueTime: {type: "string", title: "Due time", format: "time", default: "09:30:00"},
+        amount: {type: "number", title: "Amount", default: 42.5},
+        priority: {type: "integer", title: "Priority", minimum: 1, maximum: 5, default: 3},
+        enabled: {type: "boolean", title: "Enabled", default: true},
+        status: {type: "string", title: "Status", enum: ["Draft", "Ready"], default: "Ready"},
+        tags: {
+          type: "array",
+          title: "Tags",
+          items: {type: "string", enum: ["One", "Two", "Three"]},
+          default: ["One", "Three"],
+        },
+        owner: {
+          type: "object",
+          title: "Owner",
+          properties: {
+            name: {type: "string", title: "Owner name", default: "Grace"},
+          },
+        },
+        milestones: {
+          type: "array",
+          title: "Milestones",
+          items: {
+            type: "object",
+            properties: {
+              label: {type: "string", title: "Milestone label"},
+            },
+          },
+          default: [{label: "Kickoff"}],
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+
+    expect(screen.getByLabelText("Short text")).toHaveValue("Ada");
+    expect(screen.getByLabelText("Long text")).toHaveValue("Long default");
+    expect(screen.getByLabelText("Email")).toHaveValue("ada@example.com");
+    expect(screen.getByLabelText("Website")).toHaveValue("https://example.com");
+    expect(container.querySelector('[data-sf-path="/amount"] input')).toHaveValue("42.5");
+    expect(screen.getByRole("switch", {name: "Enabled"})).toBeChecked();
+    expect(screen.getByRole("radio", {name: "Ready"})).toBeChecked();
+    expect(screen.getByRole("checkbox", {name: "One"})).toBeChecked();
+    expect(screen.getByRole("checkbox", {name: "Three"})).toBeChecked();
+    expect(screen.getByLabelText("Owner name")).toHaveValue("Grace");
+    expect(screen.getByLabelText("Milestone label")).toHaveValue("Kickoff");
+
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled());
+    expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({
+      shortText: "Ada",
+      longText: "Long default",
+      email: "ada@example.com",
+      website: "https://example.com",
+      dueDate: "2026-06-05",
+      dueTime: "09:30:00",
+      amount: 42.5,
+      priority: 3,
+      enabled: true,
+      status: "Ready",
+      tags: ["One", "Three"],
+      owner: {name: "Grace"},
+      milestones: [{label: "Kickoff"}],
+    });
+  });
+
   test("renders boolean fields as switches with labels before the control", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
     const field = container.querySelector('[data-sf-path="/requiresReview"]');

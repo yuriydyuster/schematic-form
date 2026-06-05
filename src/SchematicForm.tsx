@@ -1,5 +1,5 @@
 import * as HeroUI from "@heroui/react";
-import {ArrowDown, ArrowRotateLeft, ArrowUp, Plus, TrashBin} from "@gravity-ui/icons";
+import {ArrowDown, ArrowRotateLeft, ArrowUp, Envelope, Globe, Plus, TrashBin} from "@gravity-ui/icons";
 import {
   getLocalTimeZone,
   parseAbsoluteToLocal,
@@ -78,6 +78,7 @@ const FieldError = H.FieldError ?? ((props: React.HTMLAttributes<HTMLDivElement>
 const Fieldset = H.Fieldset;
 const Form = H.Form;
 const Input = H.Input;
+const InputGroup = H.InputGroup ?? (({fullWidth: _fullWidth, ...props}: React.HTMLAttributes<HTMLDivElement> & {fullWidth?: boolean}) => <div {...props} />);
 const Label = H.Label ?? ((props: React.LabelHTMLAttributes<HTMLLabelElement>) => <label {...props} />);
 const ListBox = H.ListBox;
 const NumberField = H.NumberField;
@@ -118,6 +119,8 @@ const DatePickerTrigger = DatePicker?.Trigger ?? Button;
 const DatePickerTriggerIndicator = DatePicker?.TriggerIndicator ?? (() => null);
 const FieldsetGroup = Fieldset?.Group ?? ((props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />);
 const FieldsetLegend = Fieldset?.Legend ?? ((props: React.HTMLAttributes<HTMLLegendElement>) => <legend {...props} />);
+const InputGroupInput = InputGroup?.Input ?? Input;
+const InputGroupSuffix = InputGroup?.Suffix ?? ((props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />);
 const NumberFieldGroup = NumberField?.Group ?? ((props: React.HTMLAttributes<HTMLDivElement>) => <div {...props} />);
 const NumberFieldInput = NumberField?.Input ?? Input;
 const NumberFieldDecrementButton = NumberField?.DecrementButton ?? Button;
@@ -873,6 +876,7 @@ function renderString<TData>(
   const inputType = formatToInputType(format);
   const multiline = isLongUnformattedString(schema);
   const Control = multiline ? TextArea : Input;
+  const suffixIcon = format === "email" ? Envelope : format === "uri" ? Globe : null;
 
   return (
     <TextField
@@ -891,13 +895,28 @@ function renderString<TData>(
       onChange={(next: string) => context.setFieldValue(path, schema, next, required)}
     >
       <Label>{label}</Label>
-      <Control
-        className="schematic-form__control"
-        maxLength={schema.maxLength}
-        minLength={schema.minLength}
-        pattern={schema.pattern}
-        rows={multiline ? 4 : undefined}
-      />
+      {suffixIcon ? (
+        <InputGroup fullWidth>
+          <InputGroupInput
+            className="schematic-form__control"
+            maxLength={schema.maxLength}
+            minLength={schema.minLength}
+            pattern={schema.pattern}
+            type={inputType}
+          />
+          <InputGroupSuffix>
+            <FieldIcon icon={suffixIcon} />
+          </InputGroupSuffix>
+        </InputGroup>
+      ) : (
+        <Control
+          className="schematic-form__control"
+          maxLength={schema.maxLength}
+          minLength={schema.minLength}
+          pattern={schema.pattern}
+          rows={multiline ? 4 : undefined}
+        />
+      )}
       <FieldHelp description={schema.description} issues={issues} />
     </TextField>
   );
@@ -1458,6 +1477,10 @@ function SchemaFieldHelp({description, issues}: {description?: string; issues: V
 
 function ButtonIcon({icon: Icon}: {icon: GravityIcon}) {
   return <Icon aria-hidden="true" className="schematic-form__button-icon" focusable="false" />;
+}
+
+function FieldIcon({icon: Icon}: {icon: GravityIcon}) {
+  return <Icon aria-hidden="true" className="schematic-form__field-icon size-4 text-muted" focusable="false" />;
 }
 
 function IssueList({issues}: {issues: ValidationIssue[]}) {
