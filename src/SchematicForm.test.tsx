@@ -167,6 +167,37 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Email").tagName).toBe("INPUT");
   });
 
+  test("auto-fits multiline text fields while capping height at 100rem", () => {
+    const schema = {
+      type: "object",
+      title: "Text fields",
+      properties: {
+        longText: {
+          type: "string",
+          title: "Long text",
+          maxLength: 256,
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(<SchematicForm schema={schema} />);
+
+    const textArea = screen.getByLabelText("Long text") as HTMLTextAreaElement;
+    expect(textArea).toHaveClass("schematic-form__control--autofit");
+
+    Object.defineProperty(textArea, "scrollHeight", {configurable: true, value: 240});
+    fireEvent.input(textArea, {target: {value: "Line 1\nLine 2"}});
+
+    expect(textArea.style.height).toBe("240px");
+    expect(textArea.style.overflowY).toBe("hidden");
+
+    Object.defineProperty(textArea, "scrollHeight", {configurable: true, value: 1800});
+    fireEvent.input(textArea, {target: {value: "A longer value"}});
+
+    expect(textArea.style.height).toBe("1600px");
+    expect(textArea.style.overflowY).toBe("auto");
+  });
+
   test("renders formatted email and uri fields with InputGroup suffix icons", () => {
     const schema = {
       type: "object",
