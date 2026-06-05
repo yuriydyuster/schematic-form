@@ -84,4 +84,99 @@ describe("validation", () => {
     expect(validator.validate({startsAt: "09:30:00Z"}).isValid).toBe(true);
     expect(validator.validate({startsAt: "24:30:00"}).isValid).toBe(false);
   });
+
+  test("sanitizes reusable $defs without expanding local refs", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        item: {$ref: "#/$defs/item"},
+      },
+      $defs: {
+        item: {
+          type: "object",
+          required: ["display", "choice"],
+          properties: {
+            display: {type: "null", title: "Display"},
+            choice: {
+              anyOf: [
+                {type: "string", title: "Text"},
+                {type: "boolean", title: "Toggle"},
+              ],
+            },
+          },
+        },
+      },
+    } satisfies JsonSchema;
+
+    expect(sanitizeSchemaForValidation(schema)).toEqual({
+      type: "object",
+      properties: {
+        item: {$ref: "#/$defs/item"},
+      },
+      $defs: {
+        item: {
+          type: "object",
+          required: ["choice"],
+          properties: {
+            choice: {
+              oneOf: [
+                {type: "string", title: "Text"},
+                {type: "boolean", title: "Toggle"},
+              ],
+            },
+          },
+        },
+      },
+    });
+  });
+
+  test("validates local $defs refs", () => {
+    const validator = createSchemaValidator({
+      type: "object",
+      properties: {
+        person: {$ref: "#/$defs/person"},
+      },
+      $defs: {
+        person: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: {type: "string", minLength: 1},
+          },
+        },
+      },
+    });
+
+    expect(validator.validate({person: {name: "Ada"}}).isValid).toBe(true);
+    const result = validator.validate({person: {}});
+    expect(result.isValid).toBe(false);
+    expect(result.issues[0]).toMatchObject({
+      path: "/person/name",
+      fieldPath: "person.name",
+      keyword: "required",
+    });
+  });
+
+  test("compiles recursive local refs for bounded data", () => {
+    const validator = createSchemaValidator({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $ref: "#/$defs/node",
+      $defs: {
+        node: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: {type: "string"},
+            children: {
+              type: "array",
+              items: {$ref: "#/$defs/node"},
+            },
+          },
+        },
+      },
+    });
+
+    expect(validator.validate({name: "Root", children: [{name: "Child"}]}).isValid).toBe(true);
+    expect(validator.validate({name: "Root", children: [{}]}).isValid).toBe(false);
+  });
 });

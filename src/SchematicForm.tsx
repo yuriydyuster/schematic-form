@@ -51,6 +51,7 @@ import {
   keyToEnumValue,
   optionLabel,
 } from "./schema";
+import {resolveSchemaForContext} from "./refResolver";
 import {createSchemaValidator} from "./validation";
 import type {
   FieldRenderContext,
@@ -190,8 +191,10 @@ export function SchematicForm<TData = unknown>({
   const jsonSchema = schema as JsonSchema;
   const mergedMessages = {...defaultMessages, ...messages};
   const initialData = useMemo(() => {
-    const baseData = defaultValue !== undefined ? defaultValue as unknown : defaultValueForSchema(jsonSchema) ?? {};
-    return materializeRequiredIntegerSliderValues(jsonSchema, baseData);
+    const baseData = defaultValue !== undefined
+      ? defaultValue as unknown
+      : defaultValueForSchema(jsonSchema, {rootSchema: jsonSchema}) ?? {};
+    return materializeRequiredIntegerSliderValues(jsonSchema, baseData, jsonSchema);
   }, [defaultValue, jsonSchema]);
   const [internalData, setInternalData] = useState<unknown>(initialData);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -217,7 +220,7 @@ export function SchematicForm<TData = unknown>({
   const [draftHydrated, setDraftHydrated] = useState(!shouldPersistDraft);
   const data = (isControlled ? value : internalData) as unknown;
   const validationSchema = useMemo(
-    () => applyBranchSelections(jsonSchema, branchSelection),
+    () => applyBranchSelections(jsonSchema, branchSelection, [], jsonSchema),
     [branchSelection, jsonSchema],
   );
   const formLabel = getRootSchemaLabel(jsonSchema);
@@ -267,7 +270,7 @@ export function SchematicForm<TData = unknown>({
     const draft = readDraftPayload(draftStorage, draftKey, schemaFingerprint);
     if (draft) {
       const restoredData = restoreEmptyBranchSelectionValues(draft.data, draft.branchSelection);
-      setInternalData(materializeRequiredIntegerSliderValues(jsonSchema, restoredData));
+      setInternalData(materializeRequiredIntegerSliderValues(jsonSchema, restoredData, jsonSchema));
       setBranchSelection(draft.branchSelection);
       setBranchValueCache(draft.branchValueCache);
     }
@@ -334,7 +337,7 @@ export function SchematicForm<TData = unknown>({
 
   const setFieldValue = useCallback(
     (path: PathSegment[], fieldSchema: JsonSchema, nextValue: unknown, required: boolean) => {
-      const type = getSchemaType(fieldSchema);
+      const type = getSchemaType(fieldSchema, {rootSchema: jsonSchema});
       const shouldDeleteEmptyString = type === "string" && nextValue === "" && fieldSchema.minLength !== 0;
       const shouldDeleteEmptyArray = !required && type === "array" && Array.isArray(nextValue) && nextValue.length === 0;
       const shouldDeleteUndefined = nextValue === undefined;
@@ -344,7 +347,7 @@ export function SchematicForm<TData = unknown>({
           : setAtPath(data, path, nextValue);
       commitData(nextData);
     },
-    [commitData, data],
+    [commitData, data, jsonSchema],
   );
 
   const markTouched = useCallback((pointer: string) => {
@@ -451,6 +454,7 @@ export function SchematicForm<TData = unknown>({
       rowIdCounter.current += 1;
       return `sf-row-${rowIdCounter.current}`;
     },
+    rootSchema: jsonSchema,
   };
 
   return (
@@ -505,6 +509,7 @@ type RendererContext<TData> = {
   rebaseBranchMetadata(arrayPointer: string, operation: ArrayPointerRebaseOperation): void;
   commitData(data: unknown): void;
   makeRowId(): string;
+  rootSchema: JsonSchema;
 };
 
 function renderSchema<TData>(
@@ -512,11 +517,15 @@ function renderSchema<TData>(
   path: PathSegment[],
   required: boolean,
   context: RendererContext<TData>,
+  refStack: string[] = [],
 ): React.ReactNode {
-  if (isDisplayOnlySchema(schema)) return renderDisplayOnly(schema, path);
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
 
-  const branch = getBranchSchemas(schema);
-  if (branch) return renderBranch(schema, path, required, branch.branches, context);
+  if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return renderDisplayOnly(schema, path);
+
+  const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
+  if (branch) return renderBranch(schema, path, required, branch.branches, context, {}, branch.refStack);
 
   const pointer = toPointer(path);
   const fieldPath = toFieldPath(path);
@@ -544,8 +553,8 @@ function renderSchema<TData>(
   }
 
   const type = getSchemaType(schema);
-  if (type === "object") return renderObject(schema, path, context);
-  if (type === "array") return renderArray(schema, path, required, context);
+  if (type === "object") return renderObject(schema, path, context, resolved.refStack);
+  if (type === "array") return renderArray(schema, path, required, context, resolved.refStack);
   if (isEnumSchema(schema)) return renderScalarEnum(schema, path, required, context);
   if (type === "string") return renderString(schema, path, required, context);
   if (type === "number" || type === "integer") return renderNumber(schema, path, required, context);
@@ -554,12 +563,17 @@ function renderSchema<TData>(
   return null;
 }
 
-function renderObject<TData>(schema: JsonSchema, path: PathSegment[], context: RendererContext<TData>) {
+function renderObject<TData>(
+  schema: JsonSchema,
+  path: PathSegment[],
+  context: RendererContext<TData>,
+  refStack: string[] = [],
+) {
   const pointer = toPointer(path);
 
   return (
     <Surface className="schematic-form__surface" data-sf-path={pointer} key={pointer} variant="transparent">
-      {renderObjectFieldset(schema, path, context, {root: path.length === 0})}
+      {renderObjectFieldset(schema, path, context, {root: path.length === 0}, refStack)}
     </Surface>
   );
 }
@@ -569,9 +583,12 @@ function renderObjectFieldset<TData>(
   path: PathSegment[],
   context: RendererContext<TData>,
   options: {root?: boolean; forceTitle?: boolean; omitUntitledLegend?: boolean} = {},
+  refStack: string[] = [],
 ) {
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
   const label = getObjectFieldsetLabel(schema, path, options);
-  const keys = getOrderedPropertyKeys(schema);
+  const keys = getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   const required = new Set(schema.required ?? []);
 
   return (
@@ -596,7 +613,7 @@ function renderObjectFieldset<TData>(
         {keys.map((key) => {
           const child = schema.properties?.[key];
           if (!child) return null;
-          return renderSchema(child, [...path, key], required.has(key), context);
+          return renderSchema(child, [...path, key], required.has(key), context, resolved.refStack);
         })}
       </FieldsetGroup>
     </Fieldset>
@@ -623,8 +640,13 @@ function renderArray<TData>(
   path: PathSegment[],
   required: boolean,
   context: RendererContext<TData>,
+  refStack: string[] = [],
 ) {
-  if (isArrayOfStringEnum(schema)) return renderStringEnumArray(schema, path, required, context);
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
+  if (isArrayOfStringEnum(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
+    return renderStringEnumArray(schema, path, required, context, resolved.refStack);
+  }
 
   const pointer = toPointer(path);
   const label = getLabel(schema, path, "Item");
@@ -633,15 +655,19 @@ function renderArray<TData>(
   const items = Array.isArray(value) ? value : [];
   const rowIds = getRowIds(context, pointer, items.length);
   const canAdd = canAddArrayItem(schema, items.length);
-  const itemSchema = getSingleArrayItemSchema(schema) ?? {};
+  const itemSchema = getSingleArrayItemSchema(schema, context.rootSchema) ?? {};
   const itemLabel = getArrayItemActionLabel(itemSchema);
 
   const addItem = () => {
     if (!canAdd) return;
-    const isBranchItem = getBranchSchemas(itemSchema) != null;
+    const isBranchItem = getBranchSchemas(itemSchema, {rootSchema: context.rootSchema}) != null;
     const newItem = isBranchItem
       ? undefined
-      : materializeRequiredIntegerSliderValues(itemSchema, defaultArrayItemValue(schema));
+      : materializeRequiredIntegerSliderValues(
+          itemSchema,
+          defaultArrayItemValue(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}),
+          context.rootSchema,
+        );
     const newItemPointer = toPointer([...path, items.length]);
     context.rebaseBranchMetadata(pointer, {type: "insert", index: items.length});
     if (isBranchItem) {
@@ -746,21 +772,25 @@ function renderArrayItemSchema<TData>(
   schema: JsonSchema,
   path: PathSegment[],
   context: RendererContext<TData>,
+  refStack: string[] = [],
 ) {
-  if (isDisplayOnlySchema(schema)) return renderDisplayOnly(schema, path);
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
 
-  const branch = getBranchSchemas(schema);
-  if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false});
+  if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return renderDisplayOnly(schema, path);
 
-  if (getSchemaType(schema) === "object") {
-    return renderObjectFieldset(schema, path, context, {forceTitle: true});
+  const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
+  if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false}, branch.refStack);
+
+  if (getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}) === "object") {
+    return renderObjectFieldset(schema, path, context, {forceTitle: true}, resolved.refStack);
   }
 
-  if (isEnumSchema(schema)) {
+  if (isEnumSchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
     return renderDropdownEnum(schema, path, true, schema.enum ?? [], context);
   }
 
-  return renderSchema(schema, path, true, context);
+  return renderSchema(schema, path, true, context, resolved.refStack);
 }
 
 function renderBranch<TData>(
@@ -770,14 +800,17 @@ function renderBranch<TData>(
   branches: JsonSchema[],
   context: RendererContext<TData>,
   options: BranchRenderOptions = {},
+  refStack: string[] = [],
 ) {
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
   const pointer = toPointer(path);
   const label = getExplicitOrPropertyLabel(schema, path);
   const accessibleLabel = label ?? getLabel(schema, path, "Option");
   const hasBranchSelection = Object.prototype.hasOwnProperty.call(context.branchSelection, pointer);
   const selectedIndex = hasBranchSelection
     ? context.branchSelection[pointer] ?? undefined
-    : getDefaultBranchIndex(schema, branches);
+    : getDefaultBranchIndex(schema, branches, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   const selected = selectedIndex == null ? undefined : branches[selectedIndex];
   const issues = getBranchSelectorIssues(context.getVisibleIssues(pointer), selectedIndex);
   const branchOptions = branches.map((branch, index) => ({
@@ -799,7 +832,7 @@ function renderBranch<TData>(
     const hasCachedValue = Object.prototype.hasOwnProperty.call(nextCacheForPointer, cachedKey);
     const nextValue = hasCachedValue
       ? cloneDraftValue(nextCacheForPointer[cachedKey])
-      : defaultBranchValue(branches[nextIndex]);
+      : defaultBranchValue(branches[nextIndex], context.rootSchema, resolved.refStack);
     context.setBranchValueCache((current) => ({
       ...current,
       [pointer]: {
@@ -833,7 +866,7 @@ function renderBranch<TData>(
           />
           {issues.length ? <SchemaIssueList issues={issues} /> : null}
         </div>
-        {selected ? renderBranchVariant(selected, path, required, context, options) : null}
+        {selected ? renderBranchVariant(selected, path, required, context, options, resolved.refStack) : null}
       </FieldsetGroup>
     </Fieldset>
   );
@@ -874,21 +907,25 @@ function renderBranchVariant<TData>(
   required: boolean,
   context: RendererContext<TData>,
   options: BranchRenderOptions = {},
+  refStack: string[] = [],
 ) {
-  if (isDisplayOnlySchema(schema)) return renderDisplayOnly(schema, path);
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
 
-  const branch = getBranchSchemas(schema);
-  if (branch) return renderBranch(schema, path, required, branch.branches, context, options);
+  if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return renderDisplayOnly(schema, path);
 
-  if (getSchemaType(schema) === "object") {
-    return renderObjectFieldset(schema, path, context, {omitUntitledLegend: true});
+  const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
+  if (branch) return renderBranch(schema, path, required, branch.branches, context, options, branch.refStack);
+
+  if (getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}) === "object") {
+    return renderObjectFieldset(schema, path, context, {omitUntitledLegend: true}, resolved.refStack);
   }
 
-  if (options.surface === false && isEnumSchema(schema)) {
+  if (options.surface === false && isEnumSchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
     return renderScalarEnum(schema, path, required, context, {surface: false});
   }
 
-  return renderSchema(schema, path, required, context);
+  return renderSchema(schema, path, required, context, resolved.refStack);
 }
 
 function renderString<TData>(
@@ -1302,8 +1339,11 @@ function renderStringEnumArray<TData>(
   path: PathSegment[],
   required: boolean,
   context: RendererContext<TData>,
+  refStack: string[] = [],
 ) {
-  const options = (getSingleArrayItemSchema(schema)?.enum ?? []).filter((value): value is string => typeof value === "string");
+  const options = (getSingleArrayItemSchema(schema, context.rootSchema, refStack)?.enum ?? []).filter(
+    (value): value is string => typeof value === "string",
+  );
   if (options.length < 6) return renderCheckboxEnumArray(schema, path, required, options, context);
   return renderMultiselectEnumArray(schema, path, required, options, context);
 }
@@ -1337,7 +1377,8 @@ function renderCheckboxEnumArray<TData>(
             name={toFieldPath(path)}
             value={value}
             onBlur={() => context.markTouched(pointer)}
-            onChange={(next: string[]) => context.setFieldValue(path, schema, normalizeStringEnumArray(next, schema), required)}
+            onChange={(next: string[]) =>
+              context.setFieldValue(path, schema, normalizeStringEnumArray(next, schema, context.rootSchema), required)}
           >
             <FieldHelp description={schema.description} issues={issues} />
             {options.map((option) => (
@@ -1372,7 +1413,7 @@ function renderMultiselectEnumArray<TData>(
   const issues = context.getVisibleIssues(pointer);
 
   const setValues = (keys: Set<string>) => {
-    context.setFieldValue(path, schema, normalizeStringEnumArray([...keys], schema), required);
+    context.setFieldValue(path, schema, normalizeStringEnumArray([...keys], schema, context.rootSchema), required);
   };
 
   return (
@@ -1609,20 +1650,46 @@ function restoreEmptyBranchSelectionValues(data: unknown, branchSelection: Branc
   }, data);
 }
 
-function materializeRequiredIntegerSliderValues(schema: JsonSchema, data: unknown): unknown {
-  if (isDisplayOnlySchema(schema)) return data;
+function resolveRenderSchema<TData>(
+  schema: JsonSchema,
+  context: RendererContext<TData>,
+  refStack: string[] = [],
+): {schema: JsonSchema; refStack: string[]} {
+  const resolved = resolveSchemaForContext(schema, {rootSchema: context.rootSchema, refStack});
+  return resolved.ok ? {schema: resolved.schema, refStack: resolved.refStack} : {schema, refStack};
+}
 
-  const branch = getBranchSchemas(schema);
+function resolveSchemaWithRoot(
+  schema: JsonSchema,
+  rootSchema?: JsonSchema,
+  refStack: string[] = [],
+): {schema: JsonSchema; refStack: string[]} {
+  const resolved = resolveSchemaForContext(schema, {rootSchema, refStack});
+  return resolved.ok ? {schema: resolved.schema, refStack: resolved.refStack} : {schema, refStack};
+}
+
+function materializeRequiredIntegerSliderValues(
+  schema: JsonSchema,
+  data: unknown,
+  rootSchema?: JsonSchema,
+  refStack: string[] = [],
+): unknown {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+
+  if (isDisplayOnlySchema(schema, {rootSchema, refStack: resolved.refStack})) return data;
+
+  const branch = getBranchSchemas(schema, {rootSchema, refStack: resolved.refStack});
   if (branch) return data;
 
-  const type = getSchemaType(schema);
-  if (type === "object") return materializeObjectRequiredIntegerSliderValues(schema, data);
+  const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
+  if (type === "object") return materializeObjectRequiredIntegerSliderValues(schema, data, rootSchema, resolved.refStack);
   if (type === "array" && Array.isArray(data)) {
-    const itemSchema = getSingleArrayItemSchema(schema);
+    const itemSchema = getSingleArrayItemSchema(schema, rootSchema);
     if (!itemSchema) return data;
     let nextData = data;
     data.forEach((item, index) => {
-      const nextItem = materializeRequiredIntegerSliderValues(itemSchema, item);
+      const nextItem = materializeRequiredIntegerSliderValues(itemSchema, item, rootSchema);
       if (nextItem !== item) {
         if (nextData === data) nextData = [...data];
         nextData[index] = nextItem;
@@ -1634,22 +1701,31 @@ function materializeRequiredIntegerSliderValues(schema: JsonSchema, data: unknow
   return data;
 }
 
-function materializeObjectRequiredIntegerSliderValues(schema: JsonSchema, data: unknown): unknown {
+function materializeObjectRequiredIntegerSliderValues(
+  schema: JsonSchema,
+  data: unknown,
+  rootSchema?: JsonSchema,
+  refStack: string[] = [],
+): unknown {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
   const source = isRecord(data) ? data : {};
   let nextData: Record<string, unknown> = source;
   let changed = false;
   const required = new Set(schema.required ?? []);
 
-  for (const key of getOrderedPropertyKeys(schema)) {
+  for (const key of getOrderedPropertyKeys(schema, {rootSchema, refStack: resolved.refStack})) {
     const child = schema.properties?.[key];
-    if (!child || isDisplayOnlySchema(child)) continue;
+    if (!child || isDisplayOnlySchema(child, {rootSchema, refStack: resolved.refStack})) continue;
 
     const childIsRequired = required.has(key);
     const hasValue = Object.prototype.hasOwnProperty.call(nextData, key);
     const currentValue = nextData[key];
 
-    if (childIsRequired && isIntegerSliderSchema(child) && (currentValue === undefined || !hasValue)) {
-      nextData = setObjectKey(nextData, key, child.minimum);
+    const childSchema = resolveSchemaWithRoot(child, rootSchema, resolved.refStack).schema;
+
+    if (childIsRequired && isIntegerSliderSchema(childSchema, rootSchema, resolved.refStack) && (currentValue === undefined || !hasValue)) {
+      nextData = setObjectKey(nextData, key, childSchema.minimum);
       changed = true;
       continue;
     }
@@ -1657,7 +1733,7 @@ function materializeObjectRequiredIntegerSliderValues(schema: JsonSchema, data: 
     const shouldRecurse = hasValue || childIsRequired;
     if (!shouldRecurse) continue;
 
-    const nextValue = materializeRequiredIntegerSliderValues(child, hasValue ? currentValue : undefined);
+    const nextValue = materializeRequiredIntegerSliderValues(child, hasValue ? currentValue : undefined, rootSchema, resolved.refStack);
     if (nextValue !== currentValue && (nextValue !== undefined || hasValue)) {
       nextData = setObjectKey(nextData, key, nextValue);
       changed = true;
@@ -1667,8 +1743,12 @@ function materializeObjectRequiredIntegerSliderValues(schema: JsonSchema, data: 
   return changed ? nextData : data;
 }
 
-function isIntegerSliderSchema(schema: JsonSchema): boolean {
-  return getSchemaType(schema) === "integer" && typeof schema.minimum === "number" && typeof schema.maximum === "number";
+function isIntegerSliderSchema(schema: JsonSchema, rootSchema?: JsonSchema, refStack: string[] = []): boolean {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+  return getSchemaType(schema, {rootSchema, refStack: resolved.refStack}) === "integer" &&
+    typeof schema.minimum === "number" &&
+    typeof schema.maximum === "number";
 }
 
 function getIntegerSliderStep(schema: JsonSchema): number {
@@ -1683,16 +1763,34 @@ function setObjectKey(source: Record<string, unknown>, key: string, value: unkno
   return {...source, [key]: value};
 }
 
-function getSingleArrayItemSchema(schema: JsonSchema): JsonSchema | undefined {
-  return schema.items && !Array.isArray(schema.items) ? schema.items : undefined;
+function getSingleArrayItemSchema(
+  schema: JsonSchema,
+  rootSchema?: JsonSchema,
+  refStack: string[] = [],
+): JsonSchema | undefined {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+  if (!schema.items || Array.isArray(schema.items)) return undefined;
+  return resolveSchemaWithRoot(schema.items, rootSchema).schema;
 }
 
-function defaultBranchValue(schema: JsonSchema): JsonPrimitive | Record<string, unknown> | unknown[] | undefined {
-  const defaultValue = defaultValueForSchema(schema);
-  if (defaultValue !== undefined) return materializeRequiredIntegerSliderValues(schema, defaultValue) as JsonPrimitive | Record<string, unknown> | unknown[];
+function defaultBranchValue(
+  schema: JsonSchema,
+  rootSchema?: JsonSchema,
+  refStack: string[] = [],
+): JsonPrimitive | Record<string, unknown> | unknown[] | undefined {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+  const defaultValue = defaultValueForSchema(schema, {rootSchema, refStack: resolved.refStack});
+  if (defaultValue !== undefined) {
+    return materializeRequiredIntegerSliderValues(schema, defaultValue, rootSchema, resolved.refStack) as
+      | JsonPrimitive
+      | Record<string, unknown>
+      | unknown[];
+  }
   if (schema.enum?.length) return schema.enum[0];
 
-  const type = getSchemaType(schema);
+  const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
   if (type === "null") return null;
   if (type === "string") return "";
   if (type === "number" || type === "integer") return schema.minimum ?? 0;
@@ -1703,15 +1801,20 @@ function applyBranchSelections(
   schema: JsonSchema,
   selections: BranchSelectionState,
   path: PathSegment[] = [],
+  rootSchema: JsonSchema = schema,
+  refStack: string[] = [],
 ): JsonSchema {
-  const branch = getBranchSchemas(schema);
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+
+  const branch = getBranchSchemas(schema, {rootSchema, refStack: resolved.refStack});
   if (branch) {
     const pointer = toPointer(path);
     const selectedIndex = Object.prototype.hasOwnProperty.call(selections, pointer)
       ? selections[pointer] ?? undefined
-      : getDefaultBranchIndex(schema, branch.branches);
+      : getDefaultBranchIndex(schema, branch.branches, {rootSchema, refStack: branch.refStack});
     const selected = selectedIndex == null ? undefined : branch.branches[selectedIndex];
-    if (selected) return applyBranchSelections(selected, selections, path);
+    if (selected) return applyBranchSelections(selected, selections, path, rootSchema, branch.refStack);
   }
 
   const output: JsonSchema = {...schema};
@@ -1720,33 +1823,35 @@ function applyBranchSelections(
     output.properties = Object.fromEntries(
       Object.entries(schema.properties).map(([key, child]) => [
         key,
-        applyBranchSelections(child, selections, [...path, key]),
+        applyBranchSelections(child, selections, [...path, key], rootSchema, resolved.refStack),
       ]),
     );
   }
 
   if (schema.items) {
     if (Array.isArray(schema.items)) {
-      output.items = schema.items.map((child, index) => applyBranchSelections(child, selections, [...path, index]));
+      output.items = schema.items.map((child, index) =>
+        applyBranchSelections(child, selections, [...path, index], rootSchema, resolved.refStack),
+      );
     } else {
       const selectedArrayItemCount = getSelectedArrayItemCount(selections, path);
       if (selectedArrayItemCount > 0) {
         output.items = Array.from({length: selectedArrayItemCount}, (_, index) =>
-          applyBranchSelections(schema.items as JsonSchema, selections, [...path, index]),
+          applyBranchSelections(schema.items as JsonSchema, selections, [...path, index], rootSchema),
         );
-        output.additionalItems = applyAdditionalArrayItemSchema(schema, selections, path, selectedArrayItemCount);
+        output.additionalItems = applyAdditionalArrayItemSchema(schema, selections, path, selectedArrayItemCount, rootSchema);
       } else {
-        output.items = applyBranchSelections(schema.items, selections, [...path, 0]);
+        output.items = applyBranchSelections(schema.items, selections, [...path, 0], rootSchema);
       }
     }
   }
 
   if (Array.isArray(schema.oneOf)) {
-    output.oneOf = schema.oneOf.map((child) => applyBranchSelections(child, selections, path));
+    output.oneOf = schema.oneOf.map((child) => applyBranchSelections(child, selections, path, rootSchema, resolved.refStack));
   }
 
   if (Array.isArray(schema.anyOf)) {
-    output.anyOf = schema.anyOf.map((child) => applyBranchSelections(child, selections, path));
+    output.anyOf = schema.anyOf.map((child) => applyBranchSelections(child, selections, path, rootSchema, resolved.refStack));
   }
 
   return output;
@@ -1772,13 +1877,14 @@ function applyAdditionalArrayItemSchema(
   selections: BranchSelectionState,
   path: PathSegment[],
   index: number,
+  rootSchema: JsonSchema,
 ): boolean | JsonSchema {
   if (schema.additionalItems === false || schema.additionalItems === true) return schema.additionalItems;
   if (isSchemaObject(schema.additionalItems)) {
-    return applyBranchSelections(schema.additionalItems, selections, [...path, index]);
+    return applyBranchSelections(schema.additionalItems, selections, [...path, index], rootSchema);
   }
-  const itemSchema = getSingleArrayItemSchema(schema);
-  return itemSchema ? applyBranchSelections(itemSchema, selections, [...path, index]) : true;
+  const itemSchema = getSingleArrayItemSchema(schema, rootSchema);
+  return itemSchema ? applyBranchSelections(itemSchema, selections, [...path, index], rootSchema) : true;
 }
 
 function isSchemaObject(value: unknown): value is JsonSchema {
@@ -1904,8 +2010,10 @@ function formatToInputType(format: ReturnType<typeof getSupportedFormat>): strin
   return undefined;
 }
 
-function normalizeStringEnumArray(values: string[], schema: JsonSchema): string[] {
-  const allowed = new Set((getSingleArrayItemSchema(schema)?.enum ?? []).filter((item): item is string => typeof item === "string"));
+function normalizeStringEnumArray(values: string[], schema: JsonSchema, rootSchema?: JsonSchema): string[] {
+  const allowed = new Set(
+    (getSingleArrayItemSchema(schema, rootSchema)?.enum ?? []).filter((item): item is string => typeof item === "string"),
+  );
   const filtered = values.filter((value) => allowed.has(value));
   if (!schema.uniqueItems) return filtered;
   return [...new Set(filtered)];

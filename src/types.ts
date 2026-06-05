@@ -19,6 +19,8 @@ export type SupportedStringFormat = "date" | "time" | "date-time" | "email" | "u
 export type JsonSchema = {
   $id?: string;
   $schema?: string;
+  $ref?: string;
+  $defs?: Record<string, JsonSchema | boolean>;
   type?: SchemaType | SchemaType[];
   title?: string;
   description?: string;

@@ -14,6 +14,7 @@ SchematicForm helps application teams turn a data contract into a form without w
 - It supports controlled and uncontrolled React usage.
 - It can persist uncontrolled drafts to `localStorage`, `sessionStorage`, or a custom storage adapter.
 - It keeps `oneOf` and `anyOf` branch choices user-friendly by using dropdown selectors.
+- It supports local `$defs`/`$ref` reuse, including recursive array item structures.
 
 ## Installing The Package In An App
 
@@ -164,6 +165,9 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 | `type: "null"` | Display-only title/description block, excluded from form data. |
 | `oneOf` / `anyOf` | Branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`. |
 | `propertyOrdering` | Local convention for field order within objects. |
+| Local `$defs` / `$ref` | Same-document references such as `#/$defs/field` are resolved lazily for rendering and validation. |
+
+Local references are resolved only within the same schema object. Recursive refs are supported when rendering is bounded by data, such as arrays that render existing rows plus an add button. Sibling `title`, `description`, and `default` values on a `$ref` node are honored by the renderer.
 
 Unsupported or intentionally ignored in Beta:
 
@@ -172,7 +176,7 @@ Unsupported or intentionally ignored in Beta:
 - `dependencies`, `dependentRequired`, `dependentSchemas`
 - `if`, `then`, `else`
 - advanced `allOf`
-- remote `$ref` resolution
+- remote or cross-document `$ref` resolution
 - async business validation
 
 ## Draft Persistence
@@ -205,6 +209,7 @@ Ajv is the validation engine. SchematicForm sanitizes the schema before validati
 
 - Display-only `type: "null"` properties are excluded.
 - `anyOf` is validated as `oneOf`.
+- `$defs` entries are sanitized recursively while local `$ref` remains Ajv-owned.
 - Unsupported string formats are ignored.
 - Dependency and conditional keywords are ignored in Beta.
 

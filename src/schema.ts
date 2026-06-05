@@ -1,8 +1,11 @@
 import type {JsonPrimitive, JsonSchema, JsonValue, PathSegment, SchemaType, SupportedStringFormat} from "./types";
+import type {SchemaResolutionContext} from "./refResolver";
+import {resolveSchemaForContext} from "./refResolver";
 
 const supportedFormats = new Set<SupportedStringFormat>(["date", "time", "date-time", "email", "uri"]);
 
-export function getSchemaType(schema: JsonSchema): SchemaType | undefined {
+export function getSchemaType(schema: JsonSchema, context: SchemaResolutionContext = {}): SchemaType | undefined {
+  schema = getEffectiveSchema(schema, context).schema;
   const raw = Array.isArray(schema.type) ? schema.type.find((type) => type !== "null") : schema.type;
   if (raw) return raw;
   if (schema.oneOf || schema.anyOf) return undefined;
@@ -12,21 +15,42 @@ export function getSchemaType(schema: JsonSchema): SchemaType | undefined {
   return undefined;
 }
 
-export function isDisplayOnlySchema(schema: JsonSchema): boolean {
-  return getSchemaType(schema) === "null";
+export function isDisplayOnlySchema(schema: JsonSchema, context: SchemaResolutionContext = {}): boolean {
+  return getSchemaType(schema, context) === "null";
 }
 
-export function getBranchSchemas(schema: JsonSchema): {kind: "oneOf" | "anyOf"; branches: JsonSchema[]} | null {
+export function getBranchSchemas(
+  schema: JsonSchema,
+  context: SchemaResolutionContext = {},
+): {kind: "oneOf" | "anyOf"; branches: JsonSchema[]; rootSchema?: JsonSchema; refStack: string[]} | null {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
   if (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
-    return {kind: "oneOf", branches: schema.oneOf};
+    return {
+      kind: "oneOf",
+      branches: schema.oneOf.map((branch) => getEffectiveSchema(branch, effective).schema),
+      rootSchema: effective.rootSchema,
+      refStack: effective.refStack,
+    };
   }
   if (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
-    return {kind: "anyOf", branches: schema.anyOf};
+    return {
+      kind: "anyOf",
+      branches: schema.anyOf.map((branch) => getEffectiveSchema(branch, effective).schema),
+      rootSchema: effective.rootSchema,
+      refStack: effective.refStack,
+    };
   }
   return null;
 }
 
-export function getDefaultBranchIndex(schema: JsonSchema, branches: JsonSchema[]): number | undefined {
+export function getDefaultBranchIndex(
+  schema: JsonSchema,
+  branches: JsonSchema[],
+  context: SchemaResolutionContext = {},
+): number | undefined {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
   if (schema.default !== undefined) {
     const defaultValue = schema.default;
     const exactBranchDefault = branches.findIndex(
@@ -34,7 +58,7 @@ export function getDefaultBranchIndex(schema: JsonSchema, branches: JsonSchema[]
     );
     if (exactBranchDefault >= 0) return exactBranchDefault;
 
-    const matchingBranch = branches.findIndex((branch) => valueMatchesSchemaShape(defaultValue, branch));
+    const matchingBranch = branches.findIndex((branch) => valueMatchesSchemaShape(defaultValue, branch, effective));
     return matchingBranch >= 0 ? matchingBranch : 0;
   }
 
@@ -42,7 +66,8 @@ export function getDefaultBranchIndex(schema: JsonSchema, branches: JsonSchema[]
   return explicitBranchDefault >= 0 ? explicitBranchDefault : undefined;
 }
 
-export function getOrderedPropertyKeys(schema: JsonSchema): string[] {
+export function getOrderedPropertyKeys(schema: JsonSchema, context: SchemaResolutionContext = {}): string[] {
+  schema = getEffectiveSchema(schema, context).schema;
   const properties = schema.properties ?? {};
   const originalKeys = Object.keys(properties);
   const preferred = Array.isArray(schema.propertyOrdering) ? schema.propertyOrdering : [];
@@ -71,29 +96,35 @@ export function getLabel(schema: JsonSchema, path: PathSegment[], fallback = "Fi
   return last || fallback;
 }
 
-export function getSupportedFormat(schema: JsonSchema): SupportedStringFormat | undefined {
+export function getSupportedFormat(schema: JsonSchema, context: SchemaResolutionContext = {}): SupportedStringFormat | undefined {
+  schema = getEffectiveSchema(schema, context).schema;
   if (typeof schema.format !== "string") return undefined;
   return supportedFormats.has(schema.format as SupportedStringFormat)
     ? (schema.format as SupportedStringFormat)
     : undefined;
 }
 
-export function isLongUnformattedString(schema: JsonSchema): boolean {
+export function isLongUnformattedString(schema: JsonSchema, context: SchemaResolutionContext = {}): boolean {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
   return (
-    getSchemaType(schema) === "string" &&
-    !getSupportedFormat(schema) &&
+    getSchemaType(schema, effective) === "string" &&
+    !getSupportedFormat(schema, effective) &&
     ((typeof schema.minLength === "number" && schema.minLength > 255) ||
       (typeof schema.maxLength === "number" && schema.maxLength > 255))
   );
 }
 
-export function isEnumSchema(schema: JsonSchema): boolean {
+export function isEnumSchema(schema: JsonSchema, context: SchemaResolutionContext = {}): boolean {
+  schema = getEffectiveSchema(schema, context).schema;
   return Array.isArray(schema.enum) && schema.enum.length > 0;
 }
 
-export function isArrayOfStringEnum(schema: JsonSchema): boolean {
+export function isArrayOfStringEnum(schema: JsonSchema, context: SchemaResolutionContext = {}): boolean {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
   if (schema.uniqueItems !== true) return false;
-  const itemSchema = getSingleItemSchema(schema);
+  const itemSchema = getSingleItemSchema(schema, {...effective, refStack: []});
   if (!itemSchema || !Array.isArray(itemSchema.enum)) return false;
   return itemSchema.enum.every((item) => typeof item === "string");
 }
@@ -102,22 +133,29 @@ export function canAddArrayItem(schema: JsonSchema, length: number): boolean {
   return schema.maxItems == null || length < schema.maxItems;
 }
 
-export function defaultValueForSchema(schema: JsonSchema): JsonValue | undefined {
+export function defaultValueForSchema(schema: JsonSchema, context: SchemaResolutionContext = {}): JsonValue | undefined {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
   if (schema.default !== undefined) return cloneJson(schema.default);
 
-  const branch = getBranchSchemas(schema);
+  const branch = getBranchSchemas(schema, effective);
   if (branch) {
-    const defaultBranchIndex = getDefaultBranchIndex(schema, branch.branches);
-    return defaultBranchIndex == null ? undefined : defaultValueForSchema(branch.branches[defaultBranchIndex] ?? {});
+    const defaultBranchIndex = getDefaultBranchIndex(schema, branch.branches, effective);
+    return defaultBranchIndex == null
+      ? undefined
+      : defaultValueForSchema(branch.branches[defaultBranchIndex] ?? {}, {
+          rootSchema: branch.rootSchema,
+          refStack: branch.refStack,
+        });
   }
 
-  const type = getSchemaType(schema);
+  const type = getSchemaType(schema, effective);
   if (type === "object") {
     const result: Record<string, JsonValue> = {};
-    for (const key of getOrderedPropertyKeys(schema)) {
+    for (const key of getOrderedPropertyKeys(schema, effective)) {
       const child = schema.properties?.[key];
-      if (!child || isDisplayOnlySchema(child)) continue;
-      const childDefault = defaultValueForSchema(child);
+      if (!child || isDisplayOnlySchema(child, effective)) continue;
+      const childDefault = defaultValueForSchema(child, effective);
       if (childDefault !== undefined) result[key] = childDefault;
     }
     return result;
@@ -129,21 +167,25 @@ export function defaultValueForSchema(schema: JsonSchema): JsonValue | undefined
   return undefined;
 }
 
-export function defaultArrayItemValue(schema: JsonSchema): JsonValue | undefined {
-  const itemSchema = getSingleItemSchema(schema);
+export function defaultArrayItemValue(schema: JsonSchema, context: SchemaResolutionContext = {}): JsonValue | undefined {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
+  const itemSchema = getSingleItemSchema(schema, {...effective, refStack: []});
   if (!itemSchema) return undefined;
-  const explicit = defaultValueForSchema(itemSchema);
+  const explicit = defaultValueForSchema(itemSchema, effective);
   if (explicit !== undefined) return explicit;
 
-  const type = getSchemaType(itemSchema);
+  const type = getSchemaType(itemSchema, effective);
   if (type === "object") return {};
   if (type === "array") return [];
   if (type === "boolean") return false;
   return undefined;
 }
 
-function getSingleItemSchema(schema: JsonSchema): JsonSchema | undefined {
-  return schema.items && !Array.isArray(schema.items) ? schema.items : undefined;
+function getSingleItemSchema(schema: JsonSchema, context: SchemaResolutionContext = {}): JsonSchema | undefined {
+  schema = getEffectiveSchema(schema, context).schema;
+  if (!schema.items || Array.isArray(schema.items)) return undefined;
+  return getEffectiveSchema(schema.items, context).schema;
 }
 
 export function enumValueToKey(value: JsonPrimitive): string {
@@ -168,11 +210,13 @@ function inferEnumType(values: JsonPrimitive[]): SchemaType | undefined {
   return undefined;
 }
 
-function valueMatchesSchemaShape(value: JsonValue, schema: JsonSchema): boolean {
+function valueMatchesSchemaShape(value: JsonValue, schema: JsonSchema, context: SchemaResolutionContext = {}): boolean {
+  const effective = getEffectiveSchema(schema, context);
+  schema = effective.schema;
   if (schema.const !== undefined) return jsonValuesEqual(value, schema.const);
   if (schema.enum?.some((option) => jsonValuesEqual(value, option))) return true;
 
-  const type = getSchemaType(schema);
+  const type = getSchemaType(schema, effective);
   if (type === "object") {
     if (value == null || typeof value !== "object" || Array.isArray(value)) return false;
     const keys = Object.keys(value);
@@ -184,6 +228,15 @@ function valueMatchesSchemaShape(value: JsonValue, schema: JsonSchema): boolean 
   if (type === "array") return Array.isArray(value);
   if (type === "null") return value === null;
   return typeof value === type;
+}
+
+function getEffectiveSchema(
+  schema: JsonSchema,
+  context: SchemaResolutionContext = {},
+): {schema: JsonSchema; rootSchema?: JsonSchema; refStack: string[]} {
+  const result = resolveSchemaForContext(schema, context);
+  if (!result.ok) return {schema, rootSchema: context.rootSchema, refStack: context.refStack ?? []};
+  return {schema: result.schema, rootSchema: context.rootSchema, refStack: result.refStack};
 }
 
 function jsonValuesEqual(left: unknown, right: unknown): boolean {

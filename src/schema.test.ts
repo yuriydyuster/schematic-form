@@ -2,6 +2,7 @@ import {describe, expect, test} from "vitest";
 
 import {
   defaultValueForSchema,
+  getBranchSchemas,
   getDefaultBranchIndex,
   getOrderedPropertyKeys,
   isArrayOfStringEnum,
@@ -86,5 +87,81 @@ describe("schema helpers", () => {
         items: {type: "string", enum: ["A", "B"]},
       }),
     ).toBe(false);
+  });
+
+  test("derives defaults through local refs", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        profile: {$ref: "#/$defs/profile"},
+      },
+      $defs: {
+        profile: {
+          type: "object",
+          properties: {
+            display: {type: "null", title: "Display"},
+            name: {type: "string", default: "Ada"},
+          },
+        },
+      },
+    } satisfies JsonSchema;
+
+    expect(defaultValueForSchema(schema, {rootSchema: schema})).toEqual({profile: {name: "Ada"}});
+  });
+
+  test("detects referenced enum string arrays and branch schemas", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        tags: {
+          type: "array",
+          uniqueItems: true,
+          items: {$ref: "#/$defs/tag"},
+        },
+        choice: {$ref: "#/$defs/choice"},
+      },
+      $defs: {
+        tag: {type: "string", enum: ["A", "B"]},
+        choice: {
+          oneOf: [
+            {type: "string", title: "Text"},
+            {type: "boolean", title: "Toggle"},
+          ],
+        },
+      },
+    } satisfies JsonSchema;
+
+    expect(isArrayOfStringEnum(schema.properties.tags, {rootSchema: schema})).toBe(true);
+    expect(getBranchSchemas(schema.properties.choice, {rootSchema: schema})?.branches.map((branch) => branch.title)).toEqual([
+      "Text",
+      "Toggle",
+    ]);
+  });
+
+  test("uses referenced object property ordering with local annotations", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        profile: {
+          $ref: "#/$defs/profile",
+          title: "Local profile",
+        },
+      },
+      $defs: {
+        profile: {
+          type: "object",
+          title: "Base profile",
+          propertyOrdering: ["last", "first"],
+          properties: {
+            first: {type: "string"},
+            last: {type: "string"},
+            email: {type: "string"},
+          },
+        },
+      },
+    } satisfies JsonSchema;
+
+    expect(getOrderedPropertyKeys(schema.properties.profile, {rootSchema: schema})).toEqual(["last", "first", "email"]);
+    expect(defaultValueForSchema(schema.properties.profile, {rootSchema: schema})).toEqual({});
   });
 });

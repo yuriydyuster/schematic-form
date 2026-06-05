@@ -1,6 +1,6 @@
 import type {JsonSchema} from "./types";
 
-export const kitchenSinkSchema2 = {
+export const kitchenSinkSchemaOld = {
   type: "object",
   title: "Project Intake",
   description: "Descriptions render above fields and every level is wrapped in a transparent surface.",
@@ -428,17 +428,7 @@ export const kitchenSinkSchema = {
       "title": "Form",
       "description": "Array of field definitions used to build the form.",
       "items": {
-        "$ref": "#/$defs/field",
-        "title": "Field",
-        "description": "A single recursive field definition.",
-        "default": {
-          "key": "",
-          "type": "string",
-          "title": "",
-          "description": "",
-          "default": "",
-          "required": false
-        }
+        "$ref": "#/$defs/field"
       }
     }
   },
