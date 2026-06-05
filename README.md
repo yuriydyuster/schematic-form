@@ -95,6 +95,14 @@ npm run dev
 
 Open the local Vite URL printed in the terminal, usually `http://127.0.0.1:5173/`.
 
+Run Storybook for component documentation and visual review:
+
+```bash
+npm exec -- storybook dev --host 127.0.0.1 --port 6006
+```
+
+Open `http://127.0.0.1:6006/` and use the Docs tab to inspect `SchematicForm` examples, props, and controls.
+
 Run automated tests:
 
 ```bash
@@ -220,10 +228,29 @@ type SchematicFormState<TData = unknown> = {
 | `npm run lint` | Runs TypeScript checks without emitting files. |
 | `npm run typecheck` | Same TypeScript check as `lint`. |
 | `npm run build` | Builds declarations and the library bundle. |
+| `npm exec -- storybook dev --host 127.0.0.1 --port 6006` | Starts local Storybook documentation. |
 | `npm run build:storybook` | Builds static Storybook output. |
 | `npm run dev:acceptance` | Starts the Vite server for manual browser acceptance. |
 | `npm run test:acceptance:install` | Installs the Chromium browser binary used by Playwright. |
 | `npm run test:acceptance` | Runs automated Playwright browser acceptance tests against the demo. |
+
+## Storybook Documentation
+
+Storybook is used as the interactive documentation and visual review surface for `SchematicForm`. Stories live in `src/SchematicForm.stories.tsx` and are discovered through `.storybook/main.ts`.
+
+Start Storybook locally:
+
+```bash
+npm exec -- storybook dev --host 127.0.0.1 --port 6006
+```
+
+Build the static documentation site:
+
+```bash
+npm run build:storybook
+```
+
+The static build is written to `storybook-static/`. Serve that directory with any static file server to review the generated docs output.
 
 ## Package Verification
 
@@ -238,16 +265,20 @@ npm pack --dry-run
 
 ```text
 src/
-  SchematicForm.tsx       Main component and renderer
-  schema.ts               Schema interpretation helpers
-  validation.ts           Ajv integration
-  persistence.ts          Draft storage helpers
-  branchMetadata.ts       Branch pointer rebasing
-  paths.ts                Nested path utilities
-  types.ts                Public and internal types
-  sampleSchemas.ts        Demo/test schemas
+  SchematicForm.tsx         Main component and renderer
+  SchematicForm.stories.tsx Storybook examples and docs stories
+  schema.ts                 Schema interpretation helpers
+  validation.ts             Ajv integration
+  persistence.ts            Draft storage helpers
+  branchMetadata.ts         Branch pointer rebasing
+  paths.ts                  Nested path utilities
+  types.ts                  Public and internal types
+  sampleSchemas.ts          Demo/test schemas
 demo/
   main.tsx                Local demo app
+.storybook/
+  main.ts                 Storybook React Vite configuration
+  preview.ts              Storybook style and control defaults
 tests/
   browser/                Playwright acceptance tests
   setup.ts                jsdom browser API shims

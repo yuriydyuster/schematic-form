@@ -159,7 +159,7 @@ const defaultMessages = {
   selectOption: "Select an option",
 };
 
-const surfaceClassName = "schematic-form__surface rounded-lg border p-3";
+const surfaceClassName = "schematic-form__surface rounded-xl border p-3";
 const fieldClassName = "schematic-form__field flex flex-col gap-1";
 const fieldGapClassName = "gap-0";
 const schemaSectionSpacingClassName = "space-y-4";

@@ -24,6 +24,8 @@ The package name is `@schematic-form/react`. It builds ESM, CommonJS, TypeScript
 - `@schematic-form/react/styles.css` is exported from the built package and must be imported by consumers after Tailwind and HeroUI styles.
 - `demo/main.tsx` is a local Vite demo, not production library code.
 - `src/SchematicForm.stories.tsx` provides Storybook examples for development and visual review.
+- `.storybook/main.ts` configures Storybook with React Vite, the docs addon, and Tailwind CSS.
+- `.storybook/preview.ts` imports the package styles so Storybook examples render with the same styling baseline as consumers.
 
 ## Module Responsibilities
 
@@ -122,6 +124,24 @@ Automated tests run with Vitest in jsdom:
 
 Browser acceptance has two roles. `npm run test:acceptance` runs the automated Playwright suite with pass/fail status. Chrome DevTools MCP is documented in `docs/acceptance/chrome-devtools-mcp.md` for manual agent inspection and debugging.
 
+## Storybook Documentation
+
+Storybook is the local documentation and visual review surface for SchematicForm. It discovers stories from `src/**/*.stories.tsx`, with the primary examples in `src/SchematicForm.stories.tsx`.
+
+Run local interactive docs with:
+
+```bash
+npm exec -- storybook dev --host 127.0.0.1 --port 6006
+```
+
+Build static Storybook output with:
+
+```bash
+npm run build:storybook
+```
+
+The static output is written to `storybook-static/`. Do not edit generated Storybook output directly.
+
 ## Build And Distribution
 
 - `npm run dev` starts the demo app.
@@ -129,6 +149,7 @@ Browser acceptance has two roles. `npm run test:acceptance` runs the automated P
 - `npm run test:acceptance` runs automated Playwright browser acceptance tests.
 - `npm run lint` and `npm run typecheck` run TypeScript with `--noEmit`.
 - `npm run build` emits declarations through TypeScript and bundles the library with Vite library mode.
+- `npm run build:storybook` emits static Storybook documentation to `storybook-static/`.
 - Peer dependencies are `react`, `react-dom`, `@heroui/react`, and `@heroui/styles`.
 
 ## Deliberate Non-Goals In Beta
