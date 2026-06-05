@@ -568,9 +568,9 @@ function renderObjectFieldset<TData>(
   schema: JsonSchema,
   path: PathSegment[],
   context: RendererContext<TData>,
-  options: {root?: boolean} = {},
+  options: {root?: boolean; forceTitle?: boolean; omitUntitledLegend?: boolean} = {},
 ) {
-  const label = options.root ? getRootSchemaLabel(schema) : getLabel(schema, path, "Form");
+  const label = getObjectFieldsetLabel(schema, path, options);
   const keys = getOrderedPropertyKeys(schema);
   const required = new Set(schema.required ?? []);
 
@@ -603,6 +603,21 @@ function renderObjectFieldset<TData>(
   );
 }
 
+function getObjectFieldsetLabel(
+  schema: JsonSchema,
+  path: PathSegment[],
+  options: {root?: boolean; forceTitle?: boolean; omitUntitledLegend?: boolean},
+): string | undefined {
+  if (options.root) return getRootSchemaLabel(schema);
+  if (options.forceTitle) return getLabel(schema, path, "Form");
+  if (options.omitUntitledLegend) return typeof schema.title === "string" && schema.title.trim() ? schema.title.trim() : undefined;
+  return getExplicitOrPropertyLabel(schema, path);
+}
+
+function getArrayItemActionLabel(schema: JsonSchema): string {
+  return typeof schema.title === "string" && schema.title.trim() ? schema.title.trim() : "Item";
+}
+
 function renderArray<TData>(
   schema: JsonSchema,
   path: PathSegment[],
@@ -619,7 +634,7 @@ function renderArray<TData>(
   const rowIds = getRowIds(context, pointer, items.length);
   const canAdd = canAddArrayItem(schema, items.length);
   const itemSchema = getSingleArrayItemSchema(schema) ?? {};
-  const itemLabel = getLabel(itemSchema, [...path, 0], label);
+  const itemLabel = getArrayItemActionLabel(itemSchema);
 
   const addItem = () => {
     if (!canAdd) return;
@@ -662,7 +677,7 @@ function renderArray<TData>(
   return (
     <Surface className="schematic-form__surface" data-sf-path={pointer} key={pointer} variant="transparent">
       <Fieldset className="schematic-form__fieldset">
-        <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
+        {label ? <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend> : null}
         <FieldsetGroup className="schematic-form__field-group">
           <SchemaFieldHelp description={schema.description} issues={issues} />
           <div className="schematic-form__array">
@@ -738,7 +753,7 @@ function renderArrayItemSchema<TData>(
   if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false});
 
   if (getSchemaType(schema) === "object") {
-    return renderObjectFieldset(schema, path, context);
+    return renderObjectFieldset(schema, path, context, {forceTitle: true});
   }
 
   if (isEnumSchema(schema)) {
@@ -757,7 +772,8 @@ function renderBranch<TData>(
   options: BranchRenderOptions = {},
 ) {
   const pointer = toPointer(path);
-  const label = getLabel(schema, path, "Option");
+  const label = getExplicitOrPropertyLabel(schema, path);
+  const accessibleLabel = label ?? getLabel(schema, path, "Option");
   const hasBranchSelection = Object.prototype.hasOwnProperty.call(context.branchSelection, pointer);
   const selectedIndex = hasBranchSelection
     ? context.branchSelection[pointer] ?? undefined
@@ -798,12 +814,12 @@ function renderBranch<TData>(
   };
   const content = (
     <Fieldset className="schematic-form__fieldset" key={pointer}>
-      <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
+      {label ? <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend> : null}
       <FieldsetGroup className="schematic-form__field-group schematic-form__branch-group">
         {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
         <div className="schematic-form__field">
           <Dropdown
-            ariaLabel={label}
+            ariaLabel={accessibleLabel}
             disabled={context.disabled}
             invalid={issues.length > 0}
             name={`${toFieldPath(path)}.__branch`}
@@ -865,7 +881,7 @@ function renderBranchVariant<TData>(
   if (branch) return renderBranch(schema, path, required, branch.branches, context, options);
 
   if (getSchemaType(schema) === "object") {
-    return renderObjectFieldset(schema, path, context);
+    return renderObjectFieldset(schema, path, context, {omitUntitledLegend: true});
   }
 
   if (options.surface === false && isEnumSchema(schema)) {
@@ -1150,16 +1166,17 @@ function renderBoolean<TData>(
   context: RendererContext<TData>,
 ) {
   const pointer = toPointer(path);
-  const label = getLabel(schema, path);
+  const label = getExplicitOrPropertyLabel(schema, path);
   const value = Boolean(getAtPath(context.data, path));
   const issues = context.getVisibleIssues(pointer);
+  const switchLabel = label ?? (value ? "On" : "Off");
 
   return (
     <div className="schematic-form__field" data-sf-path={pointer} key={pointer}>
       <div className="schematic-form__switch-row">
-        <Label>{label}</Label>
+        <Label>{switchLabel}</Label>
         <Switch
-          aria-label={label}
+          aria-label={switchLabel}
           isDisabled={context.disabled}
           isInvalid={issues.length > 0}
           isReadOnly={context.readOnly}
@@ -1200,17 +1217,18 @@ function renderRadioEnum<TData>(
   renderOptions: {surface?: boolean} = {},
 ) {
   const pointer = toPointer(path);
-  const label = getLabel(schema, path);
+  const label = getExplicitOrPropertyLabel(schema, path);
+  const accessibleLabel = label ?? getLabel(schema, path);
   const value = getAtPath(context.data, path) as JsonPrimitive | undefined;
   const selectedKey = value === undefined ? undefined : enumValueToKey(value);
   const issues = context.getVisibleIssues(pointer);
 
   const content = (
     <Fieldset className="schematic-form__fieldset">
-      <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
+      {label ? <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend> : null}
       <FieldsetGroup className="schematic-form__field-group">
         <RadioGroup
-          aria-label={label}
+          aria-label={accessibleLabel}
           className="schematic-form__field"
           isDisabled={context.disabled}
           isInvalid={issues.length > 0}
@@ -1254,7 +1272,8 @@ function renderDropdownEnum<TData>(
   context: RendererContext<TData>,
 ) {
   const pointer = toPointer(path);
-  const label = getLabel(schema, path);
+  const label = getExplicitOrPropertyLabel(schema, path);
+  const accessibleLabel = label ?? getLabel(schema, path);
   const value = getAtPath(context.data, path) as JsonPrimitive | undefined;
   const selectedKey = value === undefined ? undefined : enumValueToKey(value);
   const issues = context.getVisibleIssues(pointer);
@@ -1262,6 +1281,7 @@ function renderDropdownEnum<TData>(
   return (
     <div className="schematic-form__field" data-sf-path={pointer} key={pointer}>
       <Dropdown
+        ariaLabel={accessibleLabel}
         disabled={context.disabled}
         invalid={issues.length > 0}
         label={label}
@@ -1296,7 +1316,8 @@ function renderCheckboxEnumArray<TData>(
   context: RendererContext<TData>,
 ) {
   const pointer = toPointer(path);
-  const label = getLabel(schema, path);
+  const label = getExplicitOrPropertyLabel(schema, path);
+  const accessibleLabel = label ?? getLabel(schema, path);
   const rawValue = getAtPath(context.data, path);
   const value = Array.isArray(rawValue) ? rawValue.filter((item): item is string => typeof item === "string") : [];
   const issues = context.getVisibleIssues(pointer);
@@ -1304,10 +1325,10 @@ function renderCheckboxEnumArray<TData>(
   return (
     <Surface className="schematic-form__surface" data-sf-path={pointer} key={pointer} variant="transparent">
       <Fieldset className="schematic-form__fieldset">
-        <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
+        {label ? <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend> : null}
         <FieldsetGroup className="schematic-form__field-group">
           <CheckboxGroup
-            aria-label={label}
+            aria-label={accessibleLabel}
             className="schematic-form__field"
             isDisabled={context.disabled}
             isInvalid={issues.length > 0}
@@ -1492,6 +1513,12 @@ function RequiredFieldsetLegend({
   required: boolean;
 }) {
   return <FieldsetLegend className={required ? "schematic-form__required-label" : undefined}>{children}</FieldsetLegend>;
+}
+
+function getExplicitOrPropertyLabel(schema: JsonSchema, path: PathSegment[]): string | undefined {
+  if (typeof schema.title === "string" && schema.title.trim()) return schema.title.trim();
+  const last = path[path.length - 1];
+  return typeof last === "string" ? getLabel(schema, path) : undefined;
 }
 
 function FieldDescription({children}: {children: React.ReactNode}) {

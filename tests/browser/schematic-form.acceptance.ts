@@ -32,7 +32,7 @@ test("loads the demo without browser runtime errors", async ({page}) => {
 
   await expect(page.getByRole("heading", {level: 2, name: "Project Intake"})).toBeVisible();
   await expect(page.getByLabel("Current form state")).toBeVisible();
-  await expect(page.locator(".slider")).toBeVisible();
+  await expect(page.locator(".slider").first()).toBeVisible();
   await expect(page.locator(".date-picker")).toHaveCount(2);
   await expect(page.locator(".time-field")).toBeVisible();
   await expect(page.locator('.schematic-form__control[type="date"], .schematic-form__control[type="time"], .schematic-form__control[type="datetime-local"]')).toHaveCount(0);

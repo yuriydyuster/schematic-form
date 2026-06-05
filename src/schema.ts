@@ -68,15 +68,7 @@ export function getLabel(schema: JsonSchema, path: PathSegment[], fallback = "Fi
   const last = path[path.length - 1];
   if (last == null) return fallback;
   if (typeof last === "number") return `${fallback} ${last + 1}`;
-  return titleize(last);
-}
-
-export function titleize(value: string): string {
-  const spaced = value
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[-_]+/g, " ")
-    .trim();
-  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : "Field";
+  return last || fallback;
 }
 
 export function getSupportedFormat(schema: JsonSchema): SupportedStringFormat | undefined {

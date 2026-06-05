@@ -29,6 +29,10 @@
   margin-block: 0;
 }
 
+.schematic-form__fieldset > .fieldset__legend + .schematic-form__field-group:not(:has(> [data-slot="schema-description"])) {
+  @apply mt-4;
+}
+
 .schematic-form__field {
   @apply flex w-full flex-col gap-1;
 }

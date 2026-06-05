@@ -29,6 +29,7 @@ export const kitchenSinkSchema = {
     "payment",
     "fulfillment",
     "mixedItems",
+    "untitledMixedItems",
     "milestones",
   ],
   properties: {
@@ -322,6 +323,34 @@ export const kitchenSinkSchema = {
             type: "boolean",
             title: "Boolean",
             description: "Toggle a true or false item value.",
+          },
+        ],
+      },
+    },
+    untitledMixedItems: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: ["name"],
+            properties: {
+              name: {
+                type: "string",
+                maxLength: 80,
+              },
+              active: {
+                type: "boolean",
+              },
+            },
+          },
+          {
+            type: "string",
+            enum: ["Red", "Green", "Blue"],
+          },
+          {
+            type: "boolean",
           },
         ],
       },

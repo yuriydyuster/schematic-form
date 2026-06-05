@@ -1010,6 +1010,16 @@ describe("SchematicForm", () => {
     expect(screen.getByRole("button", {name: /remove/i})).toBeInTheDocument();
   });
 
+  test("uses exact property keys and generic item add labels for untitled arrays", () => {
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    const untitledMixedItems = getSurface(container, "/untitledMixedItems");
+
+    expect(within(untitledMixedItems).getByText("untitledMixedItems")).toHaveClass("fieldset__legend");
+    expect(within(untitledMixedItems).getByRole("button", {name: /^add item$/i})).toBeInTheDocument();
+    expect(within(untitledMixedItems).queryByText("Untitled Mixed Items")).not.toBeInTheDocument();
+  });
+
   test("renders mixed oneOf array items in one row surface and preserves rows when switching branches", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
@@ -1148,8 +1158,43 @@ describe("SchematicForm", () => {
     });
   });
 
-  test("falls back to indexed Item labels for array items without titles", async () => {
-    const user = userEvent.setup();
+  test("uses property keys for untitled object, radio, and checkbox group labels", () => {
+    const schema = {
+      type: "object",
+      title: "Key labels",
+      properties: {
+        contactDetails: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+            },
+          },
+        },
+        deliveryChoice: {
+          type: "string",
+          enum: ["Pickup", "Ship"],
+        },
+        reviewTags: {
+          type: "array",
+          uniqueItems: true,
+          items: {
+            type: "string",
+            enum: ["Design", "Security"],
+          },
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(<SchematicForm schema={schema} />);
+
+    expect(screen.getByText("contactDetails")).toHaveClass("fieldset__legend");
+    expect(screen.getByText("deliveryChoice")).toHaveClass("fieldset__legend");
+    expect(screen.getByText("reviewTags")).toHaveClass("fieldset__legend");
+    expect(screen.getByLabelText("name")).toBeInTheDocument();
+  });
+
+  test("keeps synthetic array item legends and omits only untitled nested branch variant labels", () => {
     const schema = {
       type: "object",
       title: "Fallback arrays",
@@ -1162,20 +1207,57 @@ describe("SchematicForm", () => {
             properties: {
               value: {
                 type: "string",
-                title: "Value",
                 description: "Value entered for this row.",
               },
             },
           },
         },
+        toggles: {
+          type: "array",
+          items: {
+            default: false,
+            oneOf: [
+              {
+                type: "boolean",
+              },
+              {
+                type: "string",
+              },
+            ],
+          },
+        },
+        choices: {
+          type: "array",
+          items: {
+            default: {value: ""},
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  value: {
+                    type: "string",
+                  },
+                },
+              },
+            ],
+          },
+        },
       },
     } satisfies JsonSchema;
 
-    render(<SchematicForm schema={schema} />);
+    const {container} = render(<SchematicForm schema={schema} defaultValue={{rows: [{}], toggles: [false], choices: [{value: ""}]}} />);
 
-    await user.click(screen.getByRole("button", {name: /add/i}));
+    const objectItem = getSurface(container, "/rows/0");
+    expect(within(objectItem).getByText("Item #1")).toBeInTheDocument();
+    expect(within(objectItem).getByLabelText("value")).toBeInTheDocument();
 
-    expect(screen.getByText("Item #1")).toBeInTheDocument();
+    const choiceBranch = getSurface(container, "/choices/0");
+    expect(Array.from(choiceBranch.querySelectorAll(".fieldset__legend")).map((legend) => legend.textContent)).toEqual(["Item #1"]);
+    expect(within(choiceBranch).getByLabelText("value")).toBeInTheDocument();
+
+    const toggleBranch = getSurface(container, "/toggles/0");
+    expect(within(toggleBranch).getByText("Item #1")).toBeInTheDocument();
+    expect(within(toggleBranch).getByText("Off")).toBeInTheDocument();
   });
 
   test("renders array item buttons inside the item surface with Gravity icons and labels", async () => {
