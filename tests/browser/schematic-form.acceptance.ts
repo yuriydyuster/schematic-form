@@ -26,9 +26,9 @@ async function expectNoRuntimeErrors(errors: string[]) {
 }
 
 async function addField(page: Page, index: number) {
-  await page.locator('[data-sf-path="/form"]').getByRole("button", {name: /add field/i}).click();
-  const row = page.locator(`[data-sf-path="/form/${index}"]`);
-  await expect(row.getByText(`Field #${index + 1}`)).toBeVisible();
+  await page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i}).click();
+  const row = page.locator(`[data-sf-path="/properties/${index}"]`);
+  await expect(row.getByText(`Property #${index + 1}`)).toBeVisible();
   await expect(row.getByLabel("Key")).toBeVisible();
   return row;
 }
@@ -36,7 +36,7 @@ async function addField(page: Page, index: number) {
 async function selectValidation(page: Page, row: Locator, validationName: string) {
   await row.getByRole("button", {name: /validation/i}).first().click();
   await page.getByRole("option", {name: validationName}).click();
-  await expect(row.getByRole("button", {name: new RegExp(`${validationName} validation`, "i")})).toBeVisible();
+  await expect(row.getByRole("button", {name: new RegExp(`${validationName} type validation`, "i")})).toBeVisible();
 }
 
 test("loads the demo without browser runtime errors", async ({page}) => {
@@ -46,7 +46,7 @@ test("loads the demo without browser runtime errors", async ({page}) => {
 
   await expect(page.getByRole("heading", {level: 2, name: "Form Meta Schema"})).toBeVisible();
   await expect(page.getByLabel("Current form state")).toBeVisible();
-  await expect(page.locator('[data-sf-path="/form"]').getByRole("button", {name: /add field/i})).toBeVisible();
+  await expect(page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
   await expect(page.getByText("A meta schema for describing a form as an array of recursive field definitions.")).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });
@@ -58,7 +58,7 @@ test("invalid submit shows the summary and focuses the first invalid field", asy
   await page.getByRole("button", {name: "Submit"}).click();
 
   await expect(page.getByRole("alert")).toContainText("Please review the highlighted fields.");
-  await expect(page.locator('[data-sf-path="/form"]').getByRole("button", {name: /add field/i})).toBeFocused();
+  await expect(page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i})).toBeFocused();
   await expectNoRuntimeErrors(errors);
 });
 
@@ -68,18 +68,18 @@ test("recursive array rows add, move, and remove while preserving sibling values
   await resetDemo(page);
 
   await addField(page, 0);
-  await page.locator('[data-sf-path="/form/0"]').getByLabel("Key").fill("first");
+  await page.locator('[data-sf-path="/properties/0"]').getByLabel("Key").fill("first");
   await addField(page, 1);
-  await page.locator('[data-sf-path="/form/1"]').getByLabel("Key").fill("second");
+  await page.locator('[data-sf-path="/properties/1"]').getByLabel("Key").fill("second");
 
-  await page.locator('[data-sf-path="/form/0"]').getByRole("button", {name: /move down/i}).click();
+  await page.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /move down/i}).click();
 
-  await expect(page.locator('[data-sf-path="/form/0"]').getByLabel("Key")).toHaveValue("second");
-  await expect(page.locator('[data-sf-path="/form/1"]').getByLabel("Key")).toHaveValue("first");
+  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("second");
+  await expect(page.locator('[data-sf-path="/properties/1"]').getByLabel("Key")).toHaveValue("first");
 
-  await page.locator('[data-sf-path="/form/0"]').getByRole("button", {name: /remove/i}).click();
+  await page.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /remove/i}).click();
 
-  await expect(page.locator('[data-sf-path="/form/0"]').getByLabel("Key")).toHaveValue("first");
+  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("first");
   await expect(page.getByLabel("Current form state").locator("pre")).toContainText('"key": "first"');
   await expectNoRuntimeErrors(errors);
 });
@@ -114,7 +114,7 @@ test("draft persistence restores uncontrolled form data after reload", async ({p
 
   await page.reload();
 
-  await expect(page.locator('[data-sf-path="/form/0"]').getByLabel("Key")).toHaveValue("persistent_key");
+  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("persistent_key");
   await expect(page.getByLabel("Current form state").locator("pre")).toContainText("persistent_key");
   await expectNoRuntimeErrors(errors);
 });

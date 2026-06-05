@@ -1593,7 +1593,7 @@ function FieldIcon({icon: Icon}: {icon: GravityIcon}) {
 
 function IssueList({issues}: {issues: ValidationIssue[]}) {
   return (
-    <FieldError slot="errorMessage">
+    <FieldError className="schematic-form__field-error" data-slot="schema-field-error" slot="errorMessage">
       {issues.map((issue, index) => (
         <div key={`${issue.path}-${issue.keyword}-${index}`}>{issue.message}</div>
       ))}

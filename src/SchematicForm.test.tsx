@@ -786,7 +786,9 @@ describe("SchematicForm", () => {
     const field = container.querySelector('[data-sf-path="/projectName"]');
     expect(field).toBeInTheDocument();
     expect(within(field as HTMLElement).queryByText("Short unformatted strings render as single-line inputs by default.")).not.toBeInTheDocument();
-    expect(within(field as HTMLElement).getByText(/must have required property 'projectName'/i)).toBeInTheDocument();
+    expect(within(field as HTMLElement).getByText(/must have required property 'projectName'/i).closest(".field-error")).toHaveClass(
+      "schematic-form__field-error",
+    );
   });
 
   test("renders complex field descriptions below labels inside transparent surfaces", () => {
@@ -1108,13 +1110,13 @@ describe("SchematicForm", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
 
     expect(screen.getByRole("heading", {level: 2, name: "Form Meta Schema"})).toBeInTheDocument();
-    expect(screen.getByRole("button", {name: /add field/i})).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: /add property/i})).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", {name: /add field/i}));
+    await user.click(screen.getByRole("button", {name: /add property/i}));
 
-    const item = getSurface(container, "/form/0");
-    expect(within(item).getByText("Field #1")).toBeInTheDocument();
-    expect(within(item).getByText("A single recursive field definition.")).toBeInTheDocument();
+    const item = getSurface(container, "/properties/0");
+    expect(within(item).getByText("Property #1")).toBeInTheDocument();
+    expect(within(item).getByText("A single recursive property definition.")).toBeInTheDocument();
     expect(within(item).getByLabelText("Key")).toBeInTheDocument();
   });
 
@@ -1122,40 +1124,55 @@ describe("SchematicForm", () => {
     const user = userEvent.setup();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
 
-    await user.click(screen.getByRole("button", {name: /add field/i}));
+    await user.click(screen.getByRole("button", {name: /add property/i}));
 
-    const item = getSurface(container, "/form/0");
-    expect(within(item).getByRole("button", {name: /select an option validation/i})).toBeInTheDocument();
+    const item = getSurface(container, "/properties/0");
+    expect(within(item).getByRole("button", {name: /select an option type validation/i})).toBeInTheDocument();
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
 
     await waitFor(() => {
       expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
-      expect(within(item).getByText(/must have required property 'title'/i)).toBeInTheDocument();
-      expect(within(item).getByText(/must have required property 'description'/i)).toBeInTheDocument();
-      expect(within(item).getByText(/must have required property 'validation'/i)).toBeInTheDocument();
+      expect(within(item).getByText(/must have required property 'typeValidation'/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
   });
 
-  test("selecting a validation branch for an added local ref item does not toggle its required switch", async () => {
+  test("replaces local ref array descriptions with schema-level errors", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    const schemaArray = getSurface(container, "/properties");
+    expect(within(schemaArray).getByText("Array of property definitions used to build the form.")).toHaveClass(
+      "schematic-form__description",
+    );
+
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    expect(within(schemaArray).queryByText("Array of property definitions used to build the form.")).not.toBeInTheDocument();
+    expect(within(schemaArray).getByText(/must NOT have fewer than 1 items/i).closest("[data-slot='schema-error-message']")).toHaveClass(
+      "schematic-form__error-message",
+    );
+  });
+
+  test("selecting a type validation branch for an added local ref item does not toggle its required switch", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
 
-    await user.click(screen.getByRole("button", {name: /add field/i}));
-    const item = getSurface(container, "/form/0");
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
 
-    await user.click(within(item).getByRole("button", {name: /select an option validation/i}));
+    await user.click(within(item).getByRole("button", {name: /select an option type validation/i}));
     await user.click(await screen.findByRole("option", {name: "String Validation"}));
 
     expect(within(item).getByLabelText("Default")).toBeInTheDocument();
     await waitFor(() => {
-      const latestData = onStateChange.mock.calls.at(-1)?.[0].data as {form?: Array<{required?: boolean; validation?: {type?: string}}>};
-      expect(latestData.form?.[0]).toMatchObject({
-        required: false,
-        validation: {type: "string"},
+      const latestData = onStateChange.mock.calls.at(-1)?.[0].data as {properties?: Array<{typeValidation?: {type?: string}}>};
+      expect(latestData.properties?.[0]).toMatchObject({
+        typeValidation: {type: "string"},
       });
     });
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();

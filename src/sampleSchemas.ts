@@ -423,64 +423,64 @@ export const kitchenSinkSchema = {
   "description": "A meta schema for describing a form as an array of recursive field definitions.",
   "type": ["object"],
   "properties": {
-    "form": {
+    "properties": {
       "type": ["array"],
-      "title": "Form",
-      "description": "Array of field definitions used to build the form.",
+      "title": "Schema",
+      "description": "Array of property definitions used to build the form.",
       "minItems": 1,
       "items": {
-        "$ref": "#/$defs/field",
-        "title": "Field",
-        "description": "A single recursive field definition."
+        "$ref": "#/$defs/property",
+        "title": "Property",
+        "description": "A single recursive property definition."
       }
     }
   },
-  "required": ["form"],
+  "required": ["properties"],
   "additionalProperties": false,
   "$defs": {
-    "field": {
-      "title": "Field",
-      "description": "A recursive field definition. Common field metadata is defined directly; type-specific validation attributes are defined under validation.",
+    "property": {
+      "title": "Property",
+      "description": "A recursive property definition. Common property metadata is defined directly; type-specific validation attributes are defined under validation.",
       "type": ["object"],
       "properties": {
         "key": {
           "type": ["string"],
           "title": "Key",
-          "description": "Unique field key.",
+          "description": "Unique property key.",
           "minLength": 1
         },
         "title": {
           "type": ["string"],
           "title": "Title",
-          "description": "Human-readable field title.",
+          "description": "Human-readable property title.",
           "minLength": 1
         },
         "description": {
           "type": ["string"],
           "title": "Description",
-          "description": "Human-readable field description.",
+          "description": "Human-readable property description.",
           "minLength": 1
         },
         "required": {
           "type": ["boolean"],
           "title": "Required",
-          "description": "Whether this field is required."
+          "description": "Whether this property is required."
         },
-        "validation": {
+        "typeValidation": {
           "type": ["object"],
-          "title": "Validation",
-          "description": "Type-specific validation attributes for this field.",
+          "title": "Type Validation",
+          "description": "Type-specific validation attributes for this property.",
           "properties": {},
           "oneOf": [
             {
               "title": "String Validation",
-              "description": "Validation attributes for a string field.",
+              "description": "Validation attributes for a string property.",
               "type": ["object"],
               "properties": {
                 "type": {
                   "type": ["string"],
                   "title": "Type",
-                  "description": "Field value type.",
+                  "description": "Property value type.",
                   "enum": ["string"]
                 },
                 "default": {
@@ -521,17 +521,17 @@ export const kitchenSinkSchema = {
                   "description": "Regular expression pattern for validating the string."
                 }
               },
-              "required": ["type", "default"]
+              "required": ["type"]
             },
             {
               "title": "Number Validation",
-              "description": "Validation attributes for a number field.",
+              "description": "Validation attributes for a number property.",
               "type": ["object"],
               "properties": {
                 "type": {
                   "type": ["string"],
                   "title": "Type",
-                  "description": "Field value type.",
+                  "description": "Property value type.",
                   "enum": ["number"]
                 },
                 "default": {
@@ -566,17 +566,17 @@ export const kitchenSinkSchema = {
                   }
                 }
               },
-              "required": ["type", "default"]
+              "required": ["type"]
             },
             {
               "title": "Integer Validation",
-              "description": "Validation attributes for an integer field.",
+              "description": "Validation attributes for an integer property.",
               "type": ["object"],
               "properties": {
                 "type": {
                   "type": ["string"],
                   "title": "Type",
-                  "description": "Field value type.",
+                  "description": "Property value type.",
                   "enum": ["integer"]
                 },
                 "default": {
@@ -611,17 +611,17 @@ export const kitchenSinkSchema = {
                   }
                 }
               },
-              "required": ["type", "default"]
+              "required": ["type"]
             },
             {
               "title": "Boolean Validation",
-              "description": "Validation attributes for a boolean field.",
+              "description": "Validation attributes for a boolean property.",
               "type": ["object"],
               "properties": {
                 "type": {
                   "type": ["string"],
                   "title": "Type",
-                  "description": "Field value type.",
+                  "description": "Property value type.",
                   "enum": ["boolean"]
                 },
                 "default": {
@@ -669,23 +669,23 @@ export const kitchenSinkSchema = {
                   }
                 }
               },
-              "required": ["type", "default"]
+              "required": ["type"]
             },
             {
               "title": "Array Validation",
-              "description": "Validation attributes for an array field.",
+              "description": "Validation attributes for an array property.",
               "type": ["object"],
               "properties": {
                 "type": {
                   "type": ["string"],
                   "title": "Type",
-                  "description": "Field value type.",
+                  "description": "Property value type.",
                   "enum": ["array"]
                 },
                 "items": {
-                  "$ref": "#/$defs/field",
+                  "$ref": "#/$defs/property",
                   "title": "Items",
-                  "description": "Recursive field definition for array items."
+                  "description": "Recursive property definition for array items."
                 },
                 "minItems": {
                   "type": ["integer"],
@@ -709,13 +709,13 @@ export const kitchenSinkSchema = {
             },
             {
               "title": "Object Validation",
-              "description": "Validation attributes for an object field.",
+              "description": "Validation attributes for an object property.",
               "type": ["object"],
               "properties": {
                 "type": {
                   "type": ["string"],
                   "title": "Type",
-                  "description": "Field value type.",
+                  "description": "Property value type.",
                   "enum": ["object"]
                 },
                 "default": {
@@ -727,11 +727,11 @@ export const kitchenSinkSchema = {
                 "properties": {
                   "type": ["array"],
                   "title": "Properties",
-                  "description": "Recursive child field definitions.",
+                  "description": "Recursive child property definitions.",
                   "items": {
-                    "$ref": "#/$defs/field",
-                    "title": "Property Field",
-                    "description": "Recursive field definition for an object property."
+                    "$ref": "#/$defs/property",
+                    "title": "Property",
+                    "description": "Recursive property definition for an object property."
                   }
                 },
                 "additionalProperties": {
@@ -740,13 +740,13 @@ export const kitchenSinkSchema = {
                   "description": "Whether additional object properties are allowed."
                 }
               },
-              "required": ["type", "default", "properties"]
+              "required": ["type", "properties"]
             }
           ],
           "unevaluatedProperties": false
         }
       },
-      "required": ["key", "title", "description", "required", "validation"],
+      "required": ["key", "required", "typeValidation"],
       "additionalProperties": false
     }
   }
