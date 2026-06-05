@@ -212,6 +212,7 @@ describe("SchematicForm", () => {
         tags: {
           type: "array",
           title: "Tags",
+          uniqueItems: true,
           items: {type: "string", enum: ["One", "Two", "Three"]},
           default: ["One", "Three"],
         },
@@ -371,6 +372,11 @@ describe("SchematicForm", () => {
     expect(screen.getByRole("button", {name: /select an option status/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option channels/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option review tags/i})).toBeInTheDocument();
+    expect(container.querySelector('.schematic-form__surface[data-sf-path="/keywords"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Add Keyword"})).toBeInTheDocument();
+    expect(container.querySelector('.schematic-form__surface[data-sf-path="/labels"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Add Label"})).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", {name: "Discovery"})).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", {name: "Figma"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option payment method/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option fulfillment path/i})).toBeInTheDocument();
@@ -796,6 +802,29 @@ describe("SchematicForm", () => {
     await waitFor(() => {
       const lastState = onStateChange.mock.calls.at(-1)?.[0];
       expect(lastState?.data).toMatchObject({channels: ["Email"]});
+    });
+  });
+
+  test("renders non-unique enum string arrays as repeatable select rows", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: "Add Label"}));
+
+    const labelRow = container.querySelector('.schematic-form__array-row[data-sf-path="/labels/0"]');
+    expect(labelRow).toBeInTheDocument();
+    expect(within(labelRow as HTMLElement).queryByRole("checkbox", {name: "Discovery"})).not.toBeInTheDocument();
+
+    const trigger = within(labelRow as HTMLElement).getByRole("button", {name: /select an option label #1/i});
+    expect(trigger.closest(".select")).toBeInTheDocument();
+
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", {name: "Discovery"}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({labels: ["Discovery"]});
     });
   });
 

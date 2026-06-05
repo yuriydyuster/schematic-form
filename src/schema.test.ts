@@ -80,5 +80,11 @@ describe("schema helpers", () => {
         items: {type: "string", enum: ["A", "B"]},
       }),
     ).toBe(true);
+    expect(
+      isArrayOfStringEnum({
+        type: "array",
+        items: {type: "string", enum: ["A", "B"]},
+      }),
+    ).toBe(false);
   });
 });

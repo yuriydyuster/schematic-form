@@ -746,6 +746,10 @@ function renderArrayItemSchema<TData>(
     return renderObjectFieldset(schema, path, context);
   }
 
+  if (isEnumSchema(schema)) {
+    return renderDropdownEnum(schema, path, true, schema.enum ?? [], context);
+  }
+
   return renderSchema(schema, path, true, context);
 }
 

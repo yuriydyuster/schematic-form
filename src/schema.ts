@@ -100,6 +100,7 @@ export function isEnumSchema(schema: JsonSchema): boolean {
 }
 
 export function isArrayOfStringEnum(schema: JsonSchema): boolean {
+  if (schema.uniqueItems !== true) return false;
   const itemSchema = getSingleItemSchema(schema);
   if (!itemSchema || !Array.isArray(itemSchema.enum)) return false;
   return itemSchema.enum.every((item) => typeof item === "string");

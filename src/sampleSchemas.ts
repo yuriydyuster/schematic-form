@@ -17,6 +17,8 @@ export const kitchenSinkSchema = {
     "audience",
     "status",
     "channels",
+    "keywords",
+    "labels",
     "tools",
     "reviewTags",
     "budget",
@@ -101,6 +103,28 @@ export const kitchenSinkSchema = {
         title: "Channel",
         description: "A delivery channel for the project.",
         enum: ["Email", "Web", "Mobile", "Retail", "Partner", "Events"],
+      },
+    },
+    keywords: {
+      type: "array",
+      title: "Keywords",
+      description: "Arrays of strings without enum render as repeatable text rows.",
+      items: {
+        type: "string",
+        title: "Keyword",
+        description: "A free-form keyword for classifying the project.",
+        maxLength: 80,
+      },
+    },
+    labels: {
+      type: "array",
+      title: "Labels",
+      description: "Enum string arrays without uniqueItems render as repeatable select rows.",
+      items: {
+        type: "string",
+        title: "Label",
+        description: "A reusable label for grouping project work.",
+        enum: ["Discovery", "Delivery", "Launch"],
       },
     },
     tools: {

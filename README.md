@@ -150,8 +150,9 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 | `type: "boolean"` | Switch. |
 | Scalar `enum` with fewer than six options | Radio group. |
 | Scalar `enum` with six or more options | Dropdown. |
-| Array of string enum with fewer than six options | Checkbox group. |
-| Array of string enum with six or more options | Multiselect dropdown. |
+| Unique array of string enum with fewer than six options | Checkbox group. |
+| Unique array of string enum with six or more options | Multiselect dropdown. |
+| Non-unique array of string enum | Repeatable rows with a dropdown per item. |
 | `type: "null"` | Display-only title/description block, excluded from form data. |
 | `oneOf` / `anyOf` | Branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`. |
 | `propertyOrdering` | Local convention for field order within objects. |

@@ -59,7 +59,8 @@ SchematicForm Beta intentionally supports a bounded JSON Schema subset plus a fe
 - Long unformatted strings become text areas when `minLength` or `maxLength` is greater than `255`.
 - Integer fields with both `minimum` and `maximum` render as sliders. Other numbers and integers render as number fields.
 - Scalar enums with fewer than six options render as radios. Scalar enums with six or more options render as dropdowns.
-- Arrays of string enums with fewer than six options render as checkbox groups. Arrays of string enums with six or more options render as multiselect dropdowns.
+- Unique arrays of string enums with fewer than six options render as checkbox groups. Unique arrays of string enums with six or more options render as multiselect dropdowns.
+- Non-unique arrays of string enums render as generic repeatable rows, with each item rendered as a dropdown.
 - Generic arrays render repeatable rows with add, move, and remove actions. `maxItems` disables adding when the limit is reached.
 - `oneOf` and `anyOf` render as a branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`.
 - Inactive branch values are cached internally so users can switch back without leaking inactive values into submitted data.
