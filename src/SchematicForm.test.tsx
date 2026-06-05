@@ -1,4 +1,4 @@
-import {render, screen, waitFor, within} from "@testing-library/react";
+import {act, render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 
@@ -1105,7 +1105,43 @@ describe("SchematicForm", () => {
     expect(resetButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
     expect(resetButton).toHaveTextContent("Reset");
     expect(submitButton).toHaveClass("button--full-width");
+    expect(submitButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
     expectBefore(resetButton, submitButton);
+  });
+
+  test("marks submit button pending while async submit is running", async () => {
+    const user = userEvent.setup();
+    let resolveSubmit: () => void = () => undefined;
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+    const schema = {
+      type: "object",
+      title: "Async submit",
+      properties: {
+        name: {type: "string", title: "Name", default: "Ada"},
+      },
+    } satisfies JsonSchema;
+
+    render(<SchematicForm schema={schema} onSubmit={onSubmit} />);
+
+    const submitButton = screen.getByRole("button", {name: "Submit"});
+    await user.click(submitButton);
+
+    expect(onSubmit).toHaveBeenCalled();
+    await waitFor(() => expect(submitButton).toHaveAttribute("data-pending"));
+    expect(submitButton.querySelector(".spinner")).toBeInTheDocument();
+    expect(submitButton.querySelector(".schematic-form__button-icon")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSubmit();
+    });
+
+    await waitFor(() => expect(submitButton).not.toHaveAttribute("data-pending"));
+    expect(submitButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
   });
 
   test("shows required validation errors after submit", async () => {

@@ -93,7 +93,7 @@ export type SchematicFormProps<TData = unknown> = {
   defaultValue?: TData;
   onChange?: (data: TData) => void;
   onStateChange?: (state: SchematicFormState<TData>) => void;
-  onSubmit?: (state: SchematicFormState<TData>, event: React.FormEvent) => void;
+  onSubmit?: (state: SchematicFormState<TData>, event: React.FormEvent) => void | Promise<unknown>;
   validationMode?: ValidationMode;
   messages?: Partial<Record<string, string>>;
   className?: string;

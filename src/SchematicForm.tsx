@@ -1,5 +1,5 @@
 import * as HeroUI from "@heroui/react";
-import {ArrowDown, ArrowRotateLeft, ArrowUp, Envelope, Globe, Plus, TrashBin} from "@gravity-ui/icons";
+import {ArrowDown, ArrowRotateLeft, ArrowUp, Envelope, Globe, CircleCheck, Plus, TrashBin} from "@gravity-ui/icons";
 import {
   getLocalTimeZone,
   parseAbsoluteToLocal,
@@ -86,6 +86,7 @@ const Radio = H.Radio;
 const RadioGroup = H.RadioGroup;
 const Select = H.Select;
 const Slider = H.Slider;
+const Spinner = H.Spinner ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const Surface = H.Surface;
 const Switch = H.Switch;
 const TextArea = H.TextArea;
@@ -199,6 +200,7 @@ export function SchematicForm<TData = unknown>({
   const [internalData, setInternalData] = useState<unknown>(initialData);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setSubmitting] = useState(false);
   const [branchSelection, setBranchSelection] = useState<BranchSelectionState>({});
   const [branchValueCache, setBranchValueCache] = useState<BranchValueCache>({});
   const [rowIdsByPointer, setRowIdsByPointer] = useState<Record<string, string[]>>({});
@@ -369,6 +371,8 @@ export function SchematicForm<TData = unknown>({
   const handleSubmit = useCallback(
     (event: React.FormEvent) => {
       event.preventDefault();
+      if (isSubmitting) return;
+
       setSubmitted(true);
       const nextState = {
         data: data as TData,
@@ -386,7 +390,11 @@ export function SchematicForm<TData = unknown>({
         removeDraftPayload(draftStorage, draftKey);
       }
 
-      onSubmit?.(nextState, event);
+      const submitResult = onSubmit?.(nextState, event);
+      if (isPromiseLike(submitResult)) {
+        setSubmitting(true);
+        void submitResult.finally(() => setSubmitting(false)).catch(() => undefined);
+      }
     },
     [
       clearPersistedDraftOnValidSubmit,
@@ -394,6 +402,7 @@ export function SchematicForm<TData = unknown>({
       data,
       draftKey,
       draftStorage,
+      isSubmitting,
       onSubmit,
       validation.errors,
       validation.isValid,
@@ -460,12 +469,17 @@ export function SchematicForm<TData = unknown>({
         ) : null}
         {renderSchema(jsonSchema, [], false, context)}
         <div className="schematic-form__form-actions grid grid-cols-2 gap-1">
-          <Button fullWidth isDisabled={disabled} type="button" variant="secondary" onPress={handleReset}>
+          <Button fullWidth isDisabled={disabled || isSubmitting} type="button" variant="secondary" onPress={handleReset}>
             <ButtonIcon icon={ArrowRotateLeft} />
             {mergedMessages.reset}
           </Button>
-          <Button fullWidth isDisabled={disabled} type="submit">
-            {mergedMessages.submit}
+          <Button fullWidth isDisabled={disabled} isPending={isSubmitting} type="submit">
+            {({isPending}: {isPending: boolean}) => (
+              <>
+                {isPending ? <Spinner color="current" size="sm" /> : <ButtonIcon icon={CircleCheck} />}
+                {mergedMessages.submit}
+              </>
+            )}
           </Button>
         </div>
       </Form>
@@ -1455,6 +1469,10 @@ function getSelectionEventTarget(selection: unknown): HTMLSelectElement | null {
   if (!selection || typeof selection !== "object") return null;
   const target = (selection as {target?: unknown}).target;
   return target instanceof HTMLSelectElement ? target : null;
+}
+
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return Boolean(value && typeof value === "object" && typeof (value as {finally?: unknown}).finally === "function");
 }
 
 function FieldDescription({children}: {children: React.ReactNode}) {
