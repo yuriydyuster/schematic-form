@@ -37,12 +37,6 @@
   @apply w-full;
 }
 
-.schematic-form__control--autofit {
-  max-height: 50rem;
-  overflow-y: hidden;
-  resize: vertical;
-}
-
 .schematic-form__array,
 .schematic-form__array-items {
   @apply flex w-full flex-col gap-3;

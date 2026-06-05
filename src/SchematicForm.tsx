@@ -893,6 +893,7 @@ function renderString<TData>(
 
   const inputType = formatToInputType(format);
   const multiline = isLongUnformattedString(schema);
+  const Control = multiline ? TextArea : Input;
   const suffixIcon = format === "email" ? Envelope : format === "uri" ? Globe : null;
 
   return (
@@ -926,69 +927,17 @@ function renderString<TData>(
           </InputGroupSuffix>
         </InputGroup>
       ) : (
-        multiline ? (
-          <AutoFitTextArea
-            className="schematic-form__control schematic-form__control--autofit"
-            maxLength={schema.maxLength}
-            minLength={schema.minLength}
-            pattern={schema.pattern}
-            rows={4}
-          />
-        ) : (
-          <Input
-            className="schematic-form__control"
-            maxLength={schema.maxLength}
-            minLength={schema.minLength}
-            pattern={schema.pattern}
-          />
-        )
+        <Control
+          className="schematic-form__control"
+          maxLength={schema.maxLength}
+          minLength={schema.minLength}
+          pattern={schema.pattern}
+          rows={multiline ? 4 : undefined}
+        />
       )}
       <FieldHelp description={schema.description} issues={issues} />
     </TextField>
   );
-}
-
-type AutoFitTextAreaProps = Omit<React.ComponentProps<typeof TextArea>, "ref">;
-
-function AutoFitTextArea({onInput, ...props}: AutoFitTextAreaProps) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    fitTextAreaHeight(ref.current);
-  });
-
-  return (
-    <TextArea
-      {...props}
-      ref={ref}
-      onInput={(event: React.FormEvent<HTMLTextAreaElement>) => {
-        onInput?.(event);
-        fitTextAreaHeight(event.currentTarget);
-      }}
-    />
-  );
-}
-
-function fitTextAreaHeight(textArea: HTMLTextAreaElement | null) {
-  if (!textArea) return;
-
-  textArea.style.height = "auto";
-  const maxHeight = getRemPixels(textArea, 100);
-  const contentHeight = textArea.scrollHeight;
-
-  if (contentHeight <= 0) {
-    textArea.style.overflowY = "hidden";
-    return;
-  }
-
-  textArea.style.height = `${Math.min(contentHeight, maxHeight)}px`;
-  textArea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
-}
-
-function getRemPixels(element: Element, rem: number) {
-  const root = element.ownerDocument.documentElement;
-  const rootFontSize = Number.parseFloat(element.ownerDocument.defaultView?.getComputedStyle(root).fontSize ?? "");
-  return rem * (Number.isFinite(rootFontSize) && rootFontSize > 0 ? rootFontSize : 16);
 }
 
 function renderDatePicker<TData>(
