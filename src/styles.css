@@ -14,7 +14,7 @@
 }
 
 .schematic-form__surface {
-  @apply flex w-full flex-col rounded-xl border p-3;
+  @apply flex w-full flex-col rounded-xl border p-3 pb-4;
 }
 
 .schematic-form__fieldset {
@@ -39,11 +39,11 @@
 
 .schematic-form__array,
 .schematic-form__array-items {
-  @apply flex w-full flex-col gap-2;
+  @apply flex w-full flex-col gap-3;
 }
 
 .schematic-form__array-row {
-  @apply flex w-full flex-col gap-4;
+  @apply flex w-full flex-col gap-2;
 }
 
 .schematic-form__row-actions {
