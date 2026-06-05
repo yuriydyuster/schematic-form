@@ -62,6 +62,7 @@ SchematicForm Beta intentionally supports a bounded JSON Schema subset plus a fe
 - Long unformatted strings become text areas when `minLength` or `maxLength` is greater than `255`.
 - Integer fields with both `minimum` and `maximum` render as sliders. Other numbers and integers render as number fields.
 - Scalar enums with fewer than six options render as radios. Scalar enums with six or more options render as dropdowns.
+- Required object properties with a single-value `enum` are hidden from user input and materialized into form data with that sole enum value.
 - Unique arrays of string enums with fewer than six options render as checkbox groups. Unique arrays of string enums with six or more options render as multiselect dropdowns.
 - Non-unique arrays of string enums render as generic repeatable rows, with each item rendered as a dropdown.
 - Generic arrays render repeatable rows with add, move, and remove actions. `maxItems` disables adding when the limit is reached.
@@ -79,7 +80,7 @@ Validation is separated from rendering. `validation.ts` sanitizes the schema bef
 - Display-only `null` properties are removed from validation and from `required`.
 - `anyOf` is converted to `oneOf`.
 - `$defs` entries are sanitized recursively while `$ref` remains in the schema for Ajv to resolve.
-- `propertyOrdering`, `allOf`, `dependencies`, `dependentRequired`, `dependentSchemas`, `if`, `then`, and `else` are ignored in Beta.
+- `propertyOrdering`, `allOf`, `dependencies`, `dependentRequired`, `dependentSchemas`, `if`, `then`, `else`, and `unevaluatedProperties` are ignored in Beta.
 - Unsupported string formats are removed before Ajv sees the schema.
 - Ajv runs with `allErrors: true`, strict mode, schema validation, and a custom `time` format.
 

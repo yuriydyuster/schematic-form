@@ -55,6 +55,28 @@ describe("schema helpers", () => {
     expect(defaultValueForSchema(schema)).toEqual({});
   });
 
+  test("materializes required single-value enum defaults and omits optional single-value enums", () => {
+    const schema = {
+      type: "object",
+      required: ["kind", "enabled", "referenced"],
+      properties: {
+        kind: {type: "string", enum: ["fixed"]},
+        enabled: {type: "boolean", enum: [true]},
+        optional: {type: "string", enum: ["optional"]},
+        referenced: {$ref: "#/$defs/referenced"},
+      },
+      $defs: {
+        referenced: {type: "integer", enum: [7]},
+      },
+    } satisfies JsonSchema;
+
+    expect(defaultValueForSchema(schema, {rootSchema: schema})).toEqual({
+      kind: "fixed",
+      enabled: true,
+      referenced: 7,
+    });
+  });
+
   test("uses explicit branch defaults for branch default selection", () => {
     const schema: JsonSchema = {
       oneOf: [

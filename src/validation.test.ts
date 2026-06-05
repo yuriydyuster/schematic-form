@@ -10,6 +10,7 @@ describe("validation", () => {
       required: ["display", "choice"],
       propertyOrdering: ["choice"],
       dependentRequired: {choice: ["other"]},
+      unevaluatedProperties: false,
       properties: {
         display: {type: "null", title: "Display"},
         choice: {
@@ -69,6 +70,32 @@ describe("validation", () => {
 
     expect(validator.validate({tags: ["A", "A"]}).isValid).toBe(false);
     expect(validator.validate({tags: ["A", "B"]}).isValid).toBe(true);
+  });
+
+  test("omits branch subschema noise when oneOf itself fails", () => {
+    const validator = createSchemaValidator({
+      type: "object",
+      properties: {
+        choice: {
+          type: "object",
+          oneOf: [
+            {type: "object", required: ["name"], properties: {name: {type: "string"}}},
+            {type: "object", required: ["enabled"], properties: {enabled: {type: "boolean"}}},
+          ],
+        },
+      },
+    });
+
+    const result = validator.validate({choice: ""});
+
+    expect(result.isValid).toBe(false);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({
+      path: "/choice",
+      fieldPath: "choice",
+      keyword: "oneOf",
+    });
+    expect(result.errors[0]).toMatch("choice: must match exactly one schema in oneOf");
   });
 
   test("accepts local and offset time format values", () => {

@@ -418,17 +418,20 @@ export const primitiveSchema = {
 } satisfies JsonSchema;
 
 export const kitchenSinkSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Form Meta Schema",
   "description": "A meta schema for describing a form as an array of recursive field definitions.",
   "type": ["object"],
-  "default": {},
   "properties": {
     "form": {
       "type": ["array"],
       "title": "Form",
       "description": "Array of field definitions used to build the form.",
+      "minItems": 1,
       "items": {
-        "$ref": "#/$defs/field"
+        "$ref": "#/$defs/field",
+        "title": "Field",
+        "description": "A single recursive field definition."
       }
     }
   },
@@ -437,511 +440,314 @@ export const kitchenSinkSchema = {
   "$defs": {
     "field": {
       "title": "Field",
-      "description": "A recursive field definition represented by one of the supported JSON Schema-like field types.",
+      "description": "A recursive field definition. Common field metadata is defined directly; type-specific validation attributes are defined under validation.",
       "type": ["object"],
-      "default": {},
-      "oneOf": [
-        {
-          "title": "String Field",
-          "description": "A field that describes a string value.",
-          "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "string",
-              "enum": ["string"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "default": {
-              "type": ["string"],
-              "title": "Default",
-              "description": "Default string value.",
-              "default": ""
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "minLength": {
-              "type": ["integer"],
-              "title": "Minimum Length",
-              "description": "Minimum allowed string length.",
-              "default": 0,
-              "minimum": 0
-            },
-            "maxLength": {
-              "type": ["integer"],
-              "title": "Maximum Length",
-              "description": "Maximum allowed string length.",
-              "default": 255,
-              "minimum": 0
-            },
-            "enum": {
-              "type": ["array"],
-              "title": "Enum",
-              "description": "Allowed string values.",
-              "items": {
-                "type": ["string"],
-                "title": "Enum Value",
-                "description": "Single allowed string value.",
-                "default": ""
-              }
-            },
-            "format": {
-              "type": ["string"],
-              "title": "Format",
-              "description": "String format hint, such as email, uri, date, or date-time.",
-              "default": ""
-            },
-            "pattern": {
-              "type": ["string"],
-              "title": "Pattern",
-              "description": "Regular expression pattern for validating the string.",
-              "default": ""
-            }
-          },
-          "required": ["key", "type", "title", "description", "default", "required"],
-          "additionalProperties": false
+      "properties": {
+        "key": {
+          "type": ["string"],
+          "title": "Key",
+          "description": "Unique field key.",
+          "minLength": 1
         },
-        {
-          "title": "Number Field",
-          "description": "A field that describes a number value.",
-          "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "number",
-              "enum": ["number"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "default": {
-              "type": ["number"],
-              "title": "Default",
-              "description": "Default number value.",
-              "default": 0
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "minimum": {
-              "type": ["number"],
-              "title": "Minimum",
-              "description": "Minimum allowed number.",
-              "default": 0
-            },
-            "maximum": {
-              "type": ["number"],
-              "title": "Maximum",
-              "description": "Maximum allowed number.",
-              "default": 100
-            },
-            "multipleOf": {
-              "type": ["number"],
-              "title": "Multiple Of",
-              "description": "The number must be a multiple of this value.",
-              "default": 1,
-              "minimum": 0
-            },
-            "enum": {
-              "type": ["array"],
-              "title": "Enum",
-              "description": "Allowed number values.",
-              "items": {
-                "type": ["number"],
-                "title": "Enum Value",
-                "description": "Single allowed number value.",
-                "default": 0
-              }
-            }
-          },
-          "required": ["key", "type", "title", "description", "default", "required"],
-          "additionalProperties": false
+        "title": {
+          "type": ["string"],
+          "title": "Title",
+          "description": "Human-readable field title.",
+          "minLength": 1
         },
-        {
-          "title": "Integer Field",
-          "description": "A field that describes an integer value.",
-          "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "integer",
-              "enum": ["integer"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "default": {
-              "type": ["integer"],
-              "title": "Default",
-              "description": "Default integer value.",
-              "default": 0
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "minimum": {
-              "type": ["integer"],
-              "title": "Minimum",
-              "description": "Minimum allowed integer.",
-              "default": 0
-            },
-            "maximum": {
-              "type": ["integer"],
-              "title": "Maximum",
-              "description": "Maximum allowed integer.",
-              "default": 100
-            },
-            "multipleOf": {
-              "type": ["integer"],
-              "title": "Multiple Of",
-              "description": "The integer must be a multiple of this value.",
-              "default": 1,
-              "minimum": 1
-            },
-            "enum": {
-              "type": ["array"],
-              "title": "Enum",
-              "description": "Allowed integer values.",
-              "items": {
-                "type": ["integer"],
-                "title": "Enum Value",
-                "description": "Single allowed integer value.",
-                "default": 0
-              }
-            }
-          },
-          "required": ["key", "type", "title", "description", "default", "required"],
-          "additionalProperties": false
+        "description": {
+          "type": ["string"],
+          "title": "Description",
+          "description": "Human-readable field description.",
+          "minLength": 1
         },
-        {
-          "title": "Boolean Field",
-          "description": "A field that describes a boolean value.",
-          "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "boolean",
-              "enum": ["boolean"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "default": {
-              "type": ["boolean"],
-              "title": "Default",
-              "description": "Default boolean value.",
-              "default": false
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "enum": {
-              "type": ["array"],
-              "title": "Enum",
-              "description": "Allowed boolean values.",
-              "items": {
-                "type": ["boolean"],
-                "title": "Enum Value",
-                "description": "Single allowed boolean value.",
-                "default": false
-              }
-            }
-          },
-          "required": ["key", "type", "title", "description", "default", "required"],
-          "additionalProperties": false
+        "required": {
+          "type": ["boolean"],
+          "title": "Required",
+          "description": "Whether this field is required."
         },
-        {
-          "title": "Null Field",
-          "description": "A field that describes a null value.",
+        "validation": {
           "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "null",
-              "enum": ["null"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "default": {
-              "type": ["null"],
-              "title": "Default",
-              "description": "Default null value.",
-              "default": null
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "enum": {
-              "type": ["array"],
-              "title": "Enum",
-              "description": "Allowed null values.",
-              "items": {
-                "type": ["null"],
-                "title": "Enum Value",
-                "description": "Single allowed null value.",
-                "default": null
-              }
-            }
-          },
-          "required": ["key", "type", "title", "description", "default", "required"],
-          "additionalProperties": false
-        },
-        {
-          "title": "Array Field",
-          "description": "A field that describes an array value.",
-          "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "array",
-              "enum": ["array"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "items": {
-              "$ref": "#/$defs/field",
-              "title": "Items",
-              "description": "Recursive field definition for array items.",
-              "default": {
-                "key": "",
-                "type": "string",
-                "title": "",
-                "description": "",
-                "default": "",
-                "required": false
-              }
-            },
-            "minItems": {
-              "type": ["integer"],
-              "title": "Minimum Items",
-              "description": "Minimum number of array items.",
-              "default": 0,
-              "minimum": 0
-            },
-            "maxItems": {
-              "type": ["integer"],
-              "title": "Maximum Items",
-              "description": "Maximum number of array items.",
-              "default": 10,
-              "minimum": 0
-            },
-            "uniqueItems": {
-              "type": ["boolean"],
-              "title": "Unique Items",
-              "description": "Whether array items must be unique.",
-              "default": false
-            }
-          },
-          "required": ["key", "type", "title", "description", "required", "items"],
-          "additionalProperties": false
-        },
-        {
-          "title": "Object Field",
-          "description": "A field that describes an object value.",
-          "type": ["object"],
-          "default": {},
-          "properties": {
-            "key": {
-              "type": ["string"],
-              "title": "Key",
-              "description": "Unique field key.",
-              "default": ""
-            },
-            "type": {
-              "type": ["string"],
-              "title": "Type",
-              "description": "Field value type.",
-              "default": "object",
-              "enum": ["object"]
-            },
-            "title": {
-              "type": ["string"],
-              "title": "Title",
-              "description": "Human-readable field title.",
-              "default": ""
-            },
-            "description": {
-              "type": ["string"],
-              "title": "Description",
-              "description": "Human-readable field description.",
-              "default": ""
-            },
-            "default": {
+          "title": "Validation",
+          "description": "Type-specific validation attributes for this field.",
+          "properties": {},
+          "oneOf": [
+            {
+              "title": "String Validation",
+              "description": "Validation attributes for a string field.",
               "type": ["object"],
-              "title": "Default",
-              "description": "Default object value.",
-              "default": {},
-              "properties": {}
-            },
-            "required": {
-              "type": ["boolean"],
-              "title": "Required",
-              "description": "Whether this field is required.",
-              "default": false
-            },
-            "properties": {
-              "type": ["array"],
-              "title": "Properties",
-              "description": "Recursive child field definitions.",
-              "items": {
-                "$ref": "#/$defs/field",
-                "title": "Property Field",
-                "description": "Recursive field definition for an object property.",
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["string"]
+                },
                 "default": {
-                  "key": "",
-                  "type": "string",
-                  "title": "",
-                  "description": "",
-                  "default": "",
-                  "required": false
+                  "type": ["string"],
+                  "title": "Default",
+                  "description": "Default string value."
+                },
+                "minLength": {
+                  "type": ["integer"],
+                  "title": "Minimum Length",
+                  "description": "Minimum allowed string length.",
+                  "minimum": 0
+                },
+                "maxLength": {
+                  "type": ["integer"],
+                  "title": "Maximum Length",
+                  "description": "Maximum allowed string length.",
+                  "minimum": 0
+                },
+                "enum": {
+                  "type": ["array"],
+                  "title": "Enum",
+                  "description": "Allowed string values.",
+                  "items": {
+                    "type": ["string"],
+                    "title": "Enum Value",
+                    "description": "Single allowed string value."
+                  }
+                },
+                "format": {
+                  "type": ["string"],
+                  "title": "Format",
+                  "description": "String format hint, such as email, uri, date, or date-time."
+                },
+                "pattern": {
+                  "type": ["string"],
+                  "title": "Pattern",
+                  "description": "Regular expression pattern for validating the string."
                 }
-              }
+              },
+              "required": ["type", "default"]
             },
-            "additionalProperties": {
-              "type": ["boolean"],
-              "title": "Additional Properties",
-              "description": "Whether additional object properties are allowed.",
-              "default": false
+            {
+              "title": "Number Validation",
+              "description": "Validation attributes for a number field.",
+              "type": ["object"],
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["number"]
+                },
+                "default": {
+                  "type": ["number"],
+                  "title": "Default",
+                  "description": "Default number value."
+                },
+                "minimum": {
+                  "type": ["number"],
+                  "title": "Minimum",
+                  "description": "Minimum allowed number."
+                },
+                "maximum": {
+                  "type": ["number"],
+                  "title": "Maximum",
+                  "description": "Maximum allowed number."
+                },
+                "multipleOf": {
+                  "type": ["number"],
+                  "title": "Multiple Of",
+                  "description": "The number must be a multiple of this value.",
+                  "minimum": 0
+                },
+                "enum": {
+                  "type": ["array"],
+                  "title": "Enum",
+                  "description": "Allowed number values.",
+                  "items": {
+                    "type": ["number"],
+                    "title": "Enum Value",
+                    "description": "Single allowed number value."
+                  }
+                }
+              },
+              "required": ["type", "default"]
+            },
+            {
+              "title": "Integer Validation",
+              "description": "Validation attributes for an integer field.",
+              "type": ["object"],
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["integer"]
+                },
+                "default": {
+                  "type": ["integer"],
+                  "title": "Default",
+                  "description": "Default integer value."
+                },
+                "minimum": {
+                  "type": ["integer"],
+                  "title": "Minimum",
+                  "description": "Minimum allowed integer."
+                },
+                "maximum": {
+                  "type": ["integer"],
+                  "title": "Maximum",
+                  "description": "Maximum allowed integer."
+                },
+                "multipleOf": {
+                  "type": ["integer"],
+                  "title": "Multiple Of",
+                  "description": "The integer must be a multiple of this value.",
+                  "minimum": 1
+                },
+                "enum": {
+                  "type": ["array"],
+                  "title": "Enum",
+                  "description": "Allowed integer values.",
+                  "items": {
+                    "type": ["integer"],
+                    "title": "Enum Value",
+                    "description": "Single allowed integer value."
+                  }
+                }
+              },
+              "required": ["type", "default"]
+            },
+            {
+              "title": "Boolean Validation",
+              "description": "Validation attributes for a boolean field.",
+              "type": ["object"],
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["boolean"]
+                },
+                "default": {
+                  "type": ["boolean"],
+                  "title": "Default",
+                  "description": "Default boolean value."
+                },
+                "enum": {
+                  "type": ["array"],
+                  "title": "Enum",
+                  "description": "Allowed boolean values.",
+                  "items": {
+                    "type": ["boolean"],
+                    "title": "Enum Value",
+                    "description": "Single allowed boolean value."
+                  }
+                }
+              },
+              "required": ["type", "default"]
+            },
+            {
+              "title": "Null Validation",
+              "description": "Validation attributes for a null field.",
+              "type": ["object"],
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["null"]
+                },
+                "default": {
+                  "type": ["null"],
+                  "title": "Default",
+                  "description": "Default null value."
+                },
+                "enum": {
+                  "type": ["array"],
+                  "title": "Enum",
+                  "description": "Allowed null values.",
+                  "items": {
+                    "type": ["null"],
+                    "title": "Enum Value",
+                    "description": "Single allowed null value."
+                  }
+                }
+              },
+              "required": ["type", "default"]
+            },
+            {
+              "title": "Array Validation",
+              "description": "Validation attributes for an array field.",
+              "type": ["object"],
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["array"]
+                },
+                "items": {
+                  "$ref": "#/$defs/field",
+                  "title": "Items",
+                  "description": "Recursive field definition for array items."
+                },
+                "minItems": {
+                  "type": ["integer"],
+                  "title": "Minimum Items",
+                  "description": "Minimum number of array items.",
+                  "minimum": 0
+                },
+                "maxItems": {
+                  "type": ["integer"],
+                  "title": "Maximum Items",
+                  "description": "Maximum number of array items.",
+                  "minimum": 0
+                },
+                "uniqueItems": {
+                  "type": ["boolean"],
+                  "title": "Unique Items",
+                  "description": "Whether array items must be unique."
+                }
+              },
+              "required": ["type", "items"]
+            },
+            {
+              "title": "Object Validation",
+              "description": "Validation attributes for an object field.",
+              "type": ["object"],
+              "properties": {
+                "type": {
+                  "type": ["string"],
+                  "title": "Type",
+                  "description": "Field value type.",
+                  "enum": ["object"]
+                },
+                "default": {
+                  "type": ["object"],
+                  "title": "Default",
+                  "description": "Default object value.",
+                  "properties": {}
+                },
+                "properties": {
+                  "type": ["array"],
+                  "title": "Properties",
+                  "description": "Recursive child field definitions.",
+                  "items": {
+                    "$ref": "#/$defs/field",
+                    "title": "Property Field",
+                    "description": "Recursive field definition for an object property."
+                  }
+                },
+                "additionalProperties": {
+                  "type": ["boolean"],
+                  "title": "Additional Properties",
+                  "description": "Whether additional object properties are allowed."
+                }
+              },
+              "required": ["type", "default", "properties"]
             }
-          },
-          "required": ["key", "type", "title", "description", "default", "required", "properties"],
-          "additionalProperties": false
+          ],
+          "unevaluatedProperties": false
         }
-      ]
+      },
+      "required": ["key", "title", "description", "required", "validation"],
+      "additionalProperties": false
     }
   }
 } satisfies JsonSchema;

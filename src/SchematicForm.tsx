@@ -43,6 +43,7 @@ import {
   getLabel,
   getOrderedPropertyKeys,
   getSchemaType,
+  getSingleEnumValue,
   getSupportedFormat,
   isArrayOfStringEnum,
   isDisplayOnlySchema,
@@ -194,7 +195,7 @@ export function SchematicForm<TData = unknown>({
     const baseData = defaultValue !== undefined
       ? defaultValue as unknown
       : defaultValueForSchema(jsonSchema, {rootSchema: jsonSchema}) ?? {};
-    return materializeRequiredIntegerSliderValues(jsonSchema, baseData, jsonSchema);
+    return materializeRequiredImplicitValues(jsonSchema, baseData, jsonSchema);
   }, [defaultValue, jsonSchema]);
   const [internalData, setInternalData] = useState<unknown>(initialData);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -270,7 +271,7 @@ export function SchematicForm<TData = unknown>({
     const draft = readDraftPayload(draftStorage, draftKey, schemaFingerprint);
     if (draft) {
       const restoredData = restoreEmptyBranchSelectionValues(draft.data, draft.branchSelection);
-      setInternalData(materializeRequiredIntegerSliderValues(jsonSchema, restoredData, jsonSchema));
+      setInternalData(materializeRequiredImplicitValues(jsonSchema, restoredData, jsonSchema));
       setBranchSelection(draft.branchSelection);
       setBranchValueCache(draft.branchValueCache);
     }
@@ -525,7 +526,7 @@ function renderSchema<TData>(
   if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return renderDisplayOnly(schema, path);
 
   const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
-  if (branch) return renderBranch(schema, path, required, branch.branches, context, {}, branch.refStack);
+  if (branch) return renderBranch(schema, path, required, branch.branches, context);
 
   const pointer = toPointer(path);
   const fieldPath = toFieldPath(path);
@@ -613,7 +614,9 @@ function renderObjectFieldset<TData>(
         {keys.map((key) => {
           const child = schema.properties?.[key];
           if (!child) return null;
-          return renderSchema(child, [...path, key], required.has(key), context, resolved.refStack);
+          const childIsRequired = required.has(key);
+          if (childIsRequired && isSingleEnumSchema(child, context.rootSchema, resolved.refStack)) return null;
+          return renderSchema(child, [...path, key], childIsRequired, context, resolved.refStack);
         })}
       </FieldsetGroup>
     </Fieldset>
@@ -663,7 +666,7 @@ function renderArray<TData>(
     const isBranchItem = getBranchSchemas(itemSchema, {rootSchema: context.rootSchema}) != null;
     const newItem = isBranchItem
       ? undefined
-      : materializeRequiredIntegerSliderValues(
+      : materializeRequiredImplicitValues(
           itemSchema,
           defaultArrayItemValue(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}),
           context.rootSchema,
@@ -780,7 +783,7 @@ function renderArrayItemSchema<TData>(
   if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return renderDisplayOnly(schema, path);
 
   const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
-  if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false}, branch.refStack);
+  if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false});
 
   if (getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}) === "object") {
     return renderObjectFieldset(schema, path, context, {forceTitle: true}, resolved.refStack);
@@ -832,7 +835,7 @@ function renderBranch<TData>(
     const hasCachedValue = Object.prototype.hasOwnProperty.call(nextCacheForPointer, cachedKey);
     const nextValue = hasCachedValue
       ? cloneDraftValue(nextCacheForPointer[cachedKey])
-      : defaultBranchValue(branches[nextIndex], context.rootSchema, resolved.refStack);
+      : defaultBranchValue(branches[nextIndex], context.rootSchema);
     context.setBranchValueCache((current) => ({
       ...current,
       [pointer]: {
@@ -866,7 +869,7 @@ function renderBranch<TData>(
           />
           {issues.length ? <SchemaIssueList issues={issues} /> : null}
         </div>
-        {selected ? renderBranchVariant(selected, path, required, context, options, resolved.refStack) : null}
+        {selected ? renderBranchVariant(selected, path, required, context, options) : null}
       </FieldsetGroup>
     </Fieldset>
   );
@@ -915,7 +918,7 @@ function renderBranchVariant<TData>(
   if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return renderDisplayOnly(schema, path);
 
   const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
-  if (branch) return renderBranch(schema, path, required, branch.branches, context, options, branch.refStack);
+  if (branch) return renderBranch(schema, path, required, branch.branches, context, options);
 
   if (getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}) === "object") {
     return renderObjectFieldset(schema, path, context, {omitUntitledLegend: true}, resolved.refStack);
@@ -1591,8 +1594,8 @@ function FieldIcon({icon: Icon}: {icon: GravityIcon}) {
 function IssueList({issues}: {issues: ValidationIssue[]}) {
   return (
     <FieldError slot="errorMessage">
-      {issues.map((issue) => (
-        <div key={`${issue.path}-${issue.keyword}`}>{issue.message}</div>
+      {issues.map((issue, index) => (
+        <div key={`${issue.path}-${issue.keyword}-${index}`}>{issue.message}</div>
       ))}
     </FieldError>
   );
@@ -1601,8 +1604,8 @@ function IssueList({issues}: {issues: ValidationIssue[]}) {
 function SchemaIssueList({issues}: {issues: ValidationIssue[]}) {
   return (
     <ErrorMessage className="schematic-form__error-message" data-slot="schema-error-message">
-      {issues.map((issue) => (
-        <div key={`${issue.path}-${issue.keyword}`}>{issue.message}</div>
+      {issues.map((issue, index) => (
+        <div key={`${issue.path}-${issue.keyword}-${index}`}>{issue.message}</div>
       ))}
     </ErrorMessage>
   );
@@ -1613,8 +1616,8 @@ function ErrorSummary({title, errors}: {title: string; errors: string[]}) {
     <div className="schematic-form__error-summary" role="alert">
       <Typography slot={null} type="h4">{title}</Typography>
       <ul>
-        {errors.map((error) => (
-          <li key={error}>{error}</li>
+        {errors.map((error, index) => (
+          <li key={`${error}-${index}`}>{error}</li>
         ))}
       </ul>
     </div>
@@ -1668,7 +1671,7 @@ function resolveSchemaWithRoot(
   return resolved.ok ? {schema: resolved.schema, refStack: resolved.refStack} : {schema, refStack};
 }
 
-function materializeRequiredIntegerSliderValues(
+function materializeRequiredImplicitValues(
   schema: JsonSchema,
   data: unknown,
   rootSchema?: JsonSchema,
@@ -1683,13 +1686,13 @@ function materializeRequiredIntegerSliderValues(
   if (branch) return data;
 
   const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
-  if (type === "object") return materializeObjectRequiredIntegerSliderValues(schema, data, rootSchema, resolved.refStack);
+  if (type === "object") return materializeObjectRequiredImplicitValues(schema, data, rootSchema, resolved.refStack);
   if (type === "array" && Array.isArray(data)) {
     const itemSchema = getSingleArrayItemSchema(schema, rootSchema);
     if (!itemSchema) return data;
     let nextData = data;
     data.forEach((item, index) => {
-      const nextItem = materializeRequiredIntegerSliderValues(itemSchema, item, rootSchema);
+      const nextItem = materializeRequiredImplicitValues(itemSchema, item, rootSchema);
       if (nextItem !== item) {
         if (nextData === data) nextData = [...data];
         nextData[index] = nextItem;
@@ -1701,7 +1704,7 @@ function materializeRequiredIntegerSliderValues(
   return data;
 }
 
-function materializeObjectRequiredIntegerSliderValues(
+function materializeObjectRequiredImplicitValues(
   schema: JsonSchema,
   data: unknown,
   rootSchema?: JsonSchema,
@@ -1724,6 +1727,13 @@ function materializeObjectRequiredIntegerSliderValues(
 
     const childSchema = resolveSchemaWithRoot(child, rootSchema, resolved.refStack).schema;
 
+    const childSingleEnumValue = childIsRequired ? getSingleEnumValue(child, {rootSchema, refStack: resolved.refStack}) : undefined;
+    if (childSingleEnumValue !== undefined && (!hasValue || currentValue !== childSingleEnumValue)) {
+      nextData = setObjectKey(nextData, key, childSingleEnumValue);
+      changed = true;
+      continue;
+    }
+
     if (childIsRequired && isIntegerSliderSchema(childSchema, rootSchema, resolved.refStack) && (currentValue === undefined || !hasValue)) {
       nextData = setObjectKey(nextData, key, childSchema.minimum);
       changed = true;
@@ -1733,7 +1743,7 @@ function materializeObjectRequiredIntegerSliderValues(
     const shouldRecurse = hasValue || childIsRequired;
     if (!shouldRecurse) continue;
 
-    const nextValue = materializeRequiredIntegerSliderValues(child, hasValue ? currentValue : undefined, rootSchema, resolved.refStack);
+    const nextValue = materializeRequiredImplicitValues(child, hasValue ? currentValue : undefined, rootSchema, resolved.refStack);
     if (nextValue !== currentValue && (nextValue !== undefined || hasValue)) {
       nextData = setObjectKey(nextData, key, nextValue);
       changed = true;
@@ -1749,6 +1759,10 @@ function isIntegerSliderSchema(schema: JsonSchema, rootSchema?: JsonSchema, refS
   return getSchemaType(schema, {rootSchema, refStack: resolved.refStack}) === "integer" &&
     typeof schema.minimum === "number" &&
     typeof schema.maximum === "number";
+}
+
+function isSingleEnumSchema(schema: JsonSchema, rootSchema?: JsonSchema, refStack: string[] = []): boolean {
+  return getSingleEnumValue(schema, {rootSchema, refStack}) !== undefined;
 }
 
 function getIntegerSliderStep(schema: JsonSchema): number {
@@ -1781,9 +1795,9 @@ function defaultBranchValue(
 ): JsonPrimitive | Record<string, unknown> | unknown[] | undefined {
   const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
   schema = resolved.schema;
-  const defaultValue = defaultValueForSchema(schema, {rootSchema, refStack: resolved.refStack});
+  const defaultValue = defaultValueForSchema(schema, {rootSchema});
   if (defaultValue !== undefined) {
-    return materializeRequiredIntegerSliderValues(schema, defaultValue, rootSchema, resolved.refStack) as
+    return materializeRequiredImplicitValues(schema, defaultValue, rootSchema) as
       | JsonPrimitive
       | Record<string, unknown>
       | unknown[];
@@ -1814,7 +1828,8 @@ function applyBranchSelections(
       ? selections[pointer] ?? undefined
       : getDefaultBranchIndex(schema, branch.branches, {rootSchema, refStack: branch.refStack});
     const selected = selectedIndex == null ? undefined : branch.branches[selectedIndex];
-    if (selected) return applyBranchSelections(selected, selections, path, rootSchema, branch.refStack);
+    if (selected) return applyBranchSelections(selected, selections, path, rootSchema);
+    return schema;
   }
 
   const output: JsonSchema = {...schema};
@@ -1847,11 +1862,11 @@ function applyBranchSelections(
   }
 
   if (Array.isArray(schema.oneOf)) {
-    output.oneOf = schema.oneOf.map((child) => applyBranchSelections(child, selections, path, rootSchema, resolved.refStack));
+    output.oneOf = schema.oneOf.map((child) => applyBranchSelections(child, selections, path, rootSchema));
   }
 
   if (Array.isArray(schema.anyOf)) {
-    output.anyOf = schema.anyOf.map((child) => applyBranchSelections(child, selections, path, rootSchema, resolved.refStack));
+    output.anyOf = schema.anyOf.map((child) => applyBranchSelections(child, selections, path, rootSchema));
   }
 
   return output;

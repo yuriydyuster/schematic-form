@@ -1,4 +1,4 @@
-import {expect, test, type Page} from "@playwright/test";
+import {expect, test, type Locator, type Page} from "@playwright/test";
 
 const draftKey = "schematic-form:kitchen-sink-demo";
 
@@ -25,13 +25,18 @@ async function expectNoRuntimeErrors(errors: string[]) {
   expect(errors).toEqual([]);
 }
 
-async function addField(page: Page, index: number, branchName: string) {
+async function addField(page: Page, index: number) {
   await page.locator('[data-sf-path="/form"]').getByRole("button", {name: /add field/i}).click();
   const row = page.locator(`[data-sf-path="/form/${index}"]`);
-  await row.getByRole("button", {name: new RegExp(`select an option field #${index + 1}`, "i")}).click();
-  await page.getByRole("option", {name: branchName}).click();
-  await expect(row.getByRole("button", {name: new RegExp(`${branchName} field #${index + 1}`, "i")})).toBeVisible();
+  await expect(row.getByText(`Field #${index + 1}`)).toBeVisible();
+  await expect(row.getByLabel("Key")).toBeVisible();
   return row;
+}
+
+async function selectValidation(page: Page, row: Locator, validationName: string) {
+  await row.getByRole("button", {name: /validation/i}).first().click();
+  await page.getByRole("option", {name: validationName}).click();
+  await expect(row.getByRole("button", {name: new RegExp(`${validationName} validation`, "i")})).toBeVisible();
 }
 
 test("loads the demo without browser runtime errors", async ({page}) => {
@@ -62,9 +67,9 @@ test("recursive array rows add, move, and remove while preserving sibling values
 
   await resetDemo(page);
 
-  await addField(page, 0, "String Field");
+  await addField(page, 0);
   await page.locator('[data-sf-path="/form/0"]').getByLabel("Key").fill("first");
-  await addField(page, 1, "String Field");
+  await addField(page, 1);
   await page.locator('[data-sf-path="/form/1"]').getByLabel("Key").fill("second");
 
   await page.locator('[data-sf-path="/form/0"]').getByRole("button", {name: /move down/i}).click();
@@ -83,14 +88,14 @@ test("branch selectors switch and validate only the active branch", async ({page
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
-  const row = await addField(page, 0, "Array Field");
+  const row = await addField(page, 0);
+  await selectValidation(page, row, "Array Validation");
 
   await expect(row.getByText("Items", {exact: true})).toBeVisible();
   await expect(page.getByText("Properties", {exact: true})).toHaveCount(0);
 
   await page.getByRole("button", {name: "Submit"}).click();
 
-  await expect(row.getByText(/must have required property 'items'/i).first()).toBeVisible();
   await expect(page.getByText(/must have required property 'properties'/i)).toHaveCount(0);
   await expect(page.getByText(/must match exactly one schema/i)).toHaveCount(0);
   await expectNoRuntimeErrors(errors);
@@ -100,7 +105,7 @@ test("draft persistence restores uncontrolled form data after reload", async ({p
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
-  const row = await addField(page, 0, "String Field");
+  const row = await addField(page, 0);
   await row.getByLabel("Key").fill("persistent_key");
   await page.waitForFunction(
     (key) => window.localStorage.getItem(key)?.includes("persistent_key"),

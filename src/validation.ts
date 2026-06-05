@@ -15,6 +15,7 @@ const ignoredKeys = new Set([
   "else",
   "propertyOrdering",
   "allOf",
+  "unevaluatedProperties",
 ]);
 
 export type SchemaValidator = {
@@ -54,7 +55,7 @@ export function createSchemaValidator(
   return {
     validate(data: unknown) {
       const ok = validate(data);
-      const issues = (ok ? [] : validate.errors ?? []).map(formatAjvError);
+      const issues = filterBranchSubschemaErrors(ok ? [] : validate.errors ?? []).map(formatAjvError);
       const errors = issues.map((issue) => errorFormatter?.(issue) ?? `${issue.fieldPath}: ${issue.message}`);
       return {isValid: Boolean(ok), issues, errors};
     },
@@ -173,6 +174,30 @@ function formatAjvError(error: ErrorObject): ValidationIssue {
     keyword: error.keyword,
     message: error.message ?? "Invalid value",
   };
+}
+
+function filterBranchSubschemaErrors(errors: ErrorObject[]): ErrorObject[] {
+  const branchErrors = errors.filter(isBranchAggregateError);
+  if (branchErrors.length === 0) return errors;
+
+  return errors.filter((error) => {
+    if (isBranchAggregateError(error)) return true;
+    return !branchErrors.some((branchError) => isNestedBranchError(error, branchError));
+  });
+}
+
+function isBranchAggregateError(error: ErrorObject): boolean {
+  return error.keyword === "oneOf" || error.keyword === "anyOf";
+}
+
+function isNestedBranchError(error: ErrorObject, branchError: ErrorObject): boolean {
+  if (error.instancePath !== branchError.instancePath) return false;
+  if (error.schemaPath.startsWith(`${branchError.schemaPath}/`)) return true;
+
+  const branchParentPath = branchError.schemaPath.replace(/\/(?:oneOf|anyOf)$/, "");
+  return error.keyword === "type" &&
+    branchParentPath !== branchError.schemaPath &&
+    error.schemaPath === `${branchParentPath}/type`;
 }
 
 function requiredPath(error: ErrorObject): string {

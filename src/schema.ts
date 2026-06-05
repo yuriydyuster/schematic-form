@@ -120,6 +120,11 @@ export function isEnumSchema(schema: JsonSchema, context: SchemaResolutionContex
   return Array.isArray(schema.enum) && schema.enum.length > 0;
 }
 
+export function getSingleEnumValue(schema: JsonSchema, context: SchemaResolutionContext = {}): JsonPrimitive | undefined {
+  schema = getEffectiveSchema(schema, context).schema;
+  return Array.isArray(schema.enum) && schema.enum.length === 1 ? cloneJson(schema.enum[0]) : undefined;
+}
+
 export function isArrayOfStringEnum(schema: JsonSchema, context: SchemaResolutionContext = {}): boolean {
   const effective = getEffectiveSchema(schema, context);
   schema = effective.schema;
@@ -145,7 +150,6 @@ export function defaultValueForSchema(schema: JsonSchema, context: SchemaResolut
       ? undefined
       : defaultValueForSchema(branch.branches[defaultBranchIndex] ?? {}, {
           rootSchema: branch.rootSchema,
-          refStack: branch.refStack,
         });
   }
 
@@ -155,6 +159,12 @@ export function defaultValueForSchema(schema: JsonSchema, context: SchemaResolut
     for (const key of getOrderedPropertyKeys(schema, effective)) {
       const child = schema.properties?.[key];
       if (!child || isDisplayOnlySchema(child, effective)) continue;
+      const childIsRequired = schema.required?.includes(key) ?? false;
+      const childSingleEnumValue = childIsRequired ? getSingleEnumValue(child, effective) : undefined;
+      if (childSingleEnumValue !== undefined) {
+        result[key] = childSingleEnumValue;
+        continue;
+      }
       const childDefault = defaultValueForSchema(child, effective);
       if (childDefault !== undefined) result[key] = childDefault;
     }

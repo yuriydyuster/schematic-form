@@ -31,6 +31,56 @@ function createMemoryStorage(): SchematicFormDraftStorage & {values: Map<string,
   };
 }
 
+function recursiveBranchSchema(): JsonSchema {
+  return {
+    type: "object",
+    title: "Recursive branches",
+    properties: {
+      nodes: {
+        type: "array",
+        title: "Nodes",
+        items: {
+          $ref: "#/$defs/node",
+          title: "Node",
+          description: "A recursive node.",
+        },
+      },
+    },
+    $defs: {
+      node: {
+        title: "Node",
+        oneOf: [
+          {
+            title: "Text Node",
+            type: "object",
+            properties: {
+              kind: {type: "string", enum: ["text"]},
+              label: {type: "string", title: "Label"},
+            },
+            required: ["kind", "label"],
+          },
+          {
+            title: "Group Node",
+            type: "object",
+            properties: {
+              kind: {type: "string", enum: ["group"]},
+              children: {
+                type: "array",
+                title: "Children",
+                items: {
+                  $ref: "#/$defs/node",
+                  title: "Child Node",
+                },
+              },
+            },
+            required: ["kind", "children"],
+          },
+        ],
+      },
+    },
+  };
+}
+
 describe("SchematicForm", () => {
   test("renders root schema title and description with Typography", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
@@ -266,6 +316,49 @@ describe("SchematicForm", () => {
       tags: ["One", "Three"],
       owner: {name: "Grace"},
       milestones: [{label: "Kickoff"}],
+    });
+  });
+
+  test("hides required single-value enum fields and materializes their values", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Implicit enum fields",
+      required: ["kind", "version", "enabled", "referenced"],
+      properties: {
+        kind: {type: "string", title: "Kind", enum: ["fixed"]},
+        version: {type: "integer", title: "Version", enum: [1]},
+        enabled: {type: "boolean", title: "Enabled", enum: [true]},
+        referenced: {$ref: "#/$defs/referenced", title: "Referenced"},
+        optionalKind: {type: "string", title: "Optional kind", enum: ["optional"]},
+        name: {type: "string", title: "Name"},
+      },
+      $defs: {
+        referenced: {type: "string", enum: ["from-ref"]},
+      },
+    } satisfies JsonSchema;
+
+    render(
+      <SchematicForm
+        schema={schema}
+        defaultValue={{kind: "wrong", version: 2, enabled: false, referenced: "wrong-ref"}}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    expect(screen.queryByText("Kind")).not.toBeInTheDocument();
+    expect(screen.queryByText("Version")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enabled")).not.toBeInTheDocument();
+    expect(screen.queryByText("Referenced")).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", {name: "optional"})).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled());
+    expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({
+      kind: "fixed",
+      version: 1,
+      enabled: true,
+      referenced: "from-ref",
     });
   });
 
@@ -1020,8 +1113,52 @@ describe("SchematicForm", () => {
     await user.click(screen.getByRole("button", {name: /add field/i}));
 
     const item = getSurface(container, "/form/0");
-    expect(within(item).getByRole("button", {name: /select an option field #1/i})).toBeInTheDocument();
-    expect(within(item).getByText("A recursive field definition represented by one of the supported JSON Schema-like field types.")).toBeInTheDocument();
+    expect(within(item).getByText("Field #1")).toBeInTheDocument();
+    expect(within(item).getByText("A single recursive field definition.")).toBeInTheDocument();
+    expect(within(item).getByLabelText("Key")).toBeInTheDocument();
+  });
+
+  test("validates an added local ref item that keeps its nested branch unselected", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add field/i}));
+
+    const item = getSurface(container, "/form/0");
+    expect(within(item).getByRole("button", {name: /select an option validation/i})).toBeInTheDocument();
+    expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
+
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    await waitFor(() => {
+      expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
+      expect(within(item).getByText(/must have required property 'title'/i)).toBeInTheDocument();
+      expect(within(item).getByText(/must have required property 'description'/i)).toBeInTheDocument();
+      expect(within(item).getByText(/must have required property 'validation'/i)).toBeInTheDocument();
+    });
+  });
+
+  test("selecting a validation branch for an added local ref item does not toggle its required switch", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: /add field/i}));
+    const item = getSurface(container, "/form/0");
+    expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
+
+    await user.click(within(item).getByRole("button", {name: /select an option validation/i}));
+    await user.click(await screen.findByRole("option", {name: "String Validation"}));
+
+    expect(within(item).getByLabelText("Default")).toBeInTheDocument();
+    await waitFor(() => {
+      const latestData = onStateChange.mock.calls.at(-1)?.[0].data as {form?: Array<{required?: boolean; validation?: {type?: string}}>};
+      expect(latestData.form?.[0]).toMatchObject({
+        required: false,
+        validation: {type: "string"},
+      });
+    });
+    expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
   });
 
   test("renders local $ref nodes with sibling title and description", async () => {
@@ -1064,24 +1201,76 @@ describe("SchematicForm", () => {
 
   test("adds nested recursive rows through local refs without expanding infinitely", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
 
-    await user.click(screen.getByRole("button", {name: /add field/i}));
-    await user.click(within(getSurface(container, "/form/0")).getByRole("button", {name: /select an option field #1/i}));
-    await user.click(await screen.findByRole("option", {name: "Object Field"}));
-
-    await waitFor(() => {
-      expect(within(getSurface(container, "/form/0")).getByLabelText("Key")).toBeInTheDocument();
-      expect(within(getSurface(container, "/form/0")).getByRole("button", {name: /add property field/i})).toBeInTheDocument();
-    });
-
-    await user.click(within(getSurface(container, "/form/0")).getByRole("button", {name: /add property field/i}));
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /select an option node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Group Node"}));
 
     await waitFor(() => {
-      const nestedItem = getSurface(container, "/form/0/properties/0");
-      expect(within(nestedItem).getByRole("button", {name: /select an option property field #1/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /add child node/i})).toBeInTheDocument();
     });
-    expect(container.querySelectorAll(".schematic-form__array-row").length).toBe(2);
+
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /add child node/i}));
+
+    await waitFor(() => {
+      const nestedItem = getSurface(container, "/nodes/0/children/0");
+      expect(within(nestedItem).getByRole("button", {name: /select an option child node #1/i})).toBeInTheDocument();
+    });
+    const rowCount = container.querySelectorAll(".schematic-form__array-row").length;
+    expect(rowCount).toBeGreaterThanOrEqual(2);
+    expect(rowCount).toBeLessThan(5);
+  });
+
+  test("validates selected recursive ref branches without sibling branch noise", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /select an option node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Text Node"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const row = getSurface(container, "/nodes/0");
+    await waitFor(() => {
+      expect(within(row).getAllByText(/must have required property 'label'/i)).toHaveLength(1);
+    });
+    expect(within(row).queryByText(/must be object/i)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/must match exactly one schema in oneOf/i)).not.toBeInTheDocument();
+  });
+
+  test("shows one concise error for an unselected recursive branch", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const row = getSurface(container, "/nodes/0");
+    await waitFor(() => {
+      expect(within(row).getAllByText(/must match exactly one schema in oneOf/i)).toHaveLength(1);
+    });
+    expect(within(row).queryByText(/must be object/i)).not.toBeInTheDocument();
+  });
+
+  test("validates nested selected recursive ref branches without sibling branch noise", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /select an option node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Group Node"}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /add child node/i}));
+    const child = getSurface(container, "/nodes/0/children/0");
+    await user.click(within(child).getByRole("button", {name: /select an option child node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Text Node"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    await waitFor(() => {
+      expect(within(child).getAllByText(/must have required property 'label'/i)).toHaveLength(1);
+    });
+    expect(within(child).queryByText(/must be object/i)).not.toBeInTheDocument();
+    expect(within(child).queryByText(/must match exactly one schema in oneOf/i)).not.toBeInTheDocument();
   });
 
   test("uses exact property keys and generic item add labels for untitled arrays", () => {
