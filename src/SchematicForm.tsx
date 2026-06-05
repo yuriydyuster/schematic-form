@@ -167,6 +167,7 @@ const fieldsetClassName = `schematic-form__fieldset flex flex-col ${fieldGapClas
 const fieldGroupClassName = `schematic-form__field-group flex flex-col ${fieldGapClassName}`;
 const branchClassName = `schematic-form__branch flex flex-col ${fieldGapClassName}`;
 const branchGroupClassName = `schematic-form__branch-group ${schemaSectionSpacingClassName}`;
+const requiredLabelClassName = "schematic-form__required-label";
 type BranchRenderOptions = {surface?: boolean};
 type DraftSaveTarget = {
   storage: SchematicFormDraftStorage;
@@ -662,7 +663,7 @@ function renderArray<TData>(
   return (
     <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
       <Fieldset className={fieldsetClassName}>
-        <FieldsetLegend>{label}</FieldsetLegend>
+        <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
         <FieldsetGroup className={fieldGroupClassName}>
           <SchemaFieldHelp description={schema.description} issues={issues} />
           <div className="schematic-form__array flex flex-col gap-2">
@@ -794,7 +795,7 @@ function renderBranch<TData>(
   };
   const content = (
     <Fieldset className={fieldsetClassName} key={pointer}>
-      <FieldsetLegend>{label}</FieldsetLegend>
+      <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
       <FieldsetGroup className={`${fieldGroupClassName} ${branchGroupClassName}`}>
         {schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null}
         <div className={fieldClassName}>
@@ -1122,7 +1123,7 @@ function renderIntegerSlider<TData>(
       }}
     >
       <div className="schematic-form__slider-header flex items-center justify-between gap-1">
-        <Label>{label}</Label>
+        <Label className={required ? requiredLabelClassName : undefined}>{label}</Label>
         <SliderOutput />
       </div>
       <SliderTrack>
@@ -1198,7 +1199,7 @@ function renderRadioEnum<TData>(
 
   const content = (
     <Fieldset className={fieldsetClassName}>
-      <FieldsetLegend>{label}</FieldsetLegend>
+      <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
       <FieldsetGroup className={fieldGroupClassName}>
         <RadioGroup
           aria-label={label}
@@ -1295,7 +1296,7 @@ function renderCheckboxEnumArray<TData>(
   return (
     <Surface className={surfaceClassName} data-sf-path={pointer} key={pointer} variant="transparent">
       <Fieldset className={fieldsetClassName}>
-        <FieldsetLegend>{label}</FieldsetLegend>
+        <RequiredFieldsetLegend required={required}>{label}</RequiredFieldsetLegend>
         <FieldsetGroup className={fieldGroupClassName}>
           <CheckboxGroup
             aria-label={label}
@@ -1473,6 +1474,16 @@ function getSelectionEventTarget(selection: unknown): HTMLSelectElement | null {
 
 function isPromiseLike(value: unknown): value is Promise<unknown> {
   return Boolean(value && typeof value === "object" && typeof (value as {finally?: unknown}).finally === "function");
+}
+
+function RequiredFieldsetLegend({
+  children,
+  required,
+}: {
+  children: React.ReactNode;
+  required: boolean;
+}) {
+  return <FieldsetLegend className={required ? requiredLabelClassName : undefined}>{children}</FieldsetLegend>;
 }
 
 function FieldDescription({children}: {children: React.ReactNode}) {

@@ -108,6 +108,17 @@ describe("SchematicForm", () => {
     expect(container.querySelector(".schematic-form__field-group")).toHaveClass("flex", "flex-col", "gap-0");
   });
 
+  test("marks required group-style fields with the required label class", () => {
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    const payment = getSurface(container, "/payment");
+    expect(within(payment).getByText("Payment method")).toHaveClass("schematic-form__required-label");
+
+    const priority = container.querySelector('[data-sf-path="/priority"]');
+    expect(priority).toBeInTheDocument();
+    expect(within(priority as HTMLElement).getByText("Priority")).toHaveClass("schematic-form__required-label");
+  });
+
   test("renders single input descriptions below the field control with HeroUI Description", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
     const field = container.querySelector('[data-sf-path="/projectName"]');
