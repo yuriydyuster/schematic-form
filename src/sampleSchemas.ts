@@ -446,13 +446,13 @@ const propertyDescriptionAnnotationSchema: JsonSchema = {
 
 const propertyAnnotationSchema: JsonSchema = {
   "type": ["object"],
-  "title": "Property Annotation",
+  "title": "Property Type",
   "description": "Type-specific validation attributes and schema annotations for this property.",
   "properties": {},
   "oneOf": [
     {
-      "title": "String Validation",
-      "description": "Validation attributes for a string property.",
+      "title": "String",
+      "description": "Annotation for a string property.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
@@ -504,8 +504,8 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type"]
     },
     {
-      "title": "Number Validation",
-      "description": "Validation attributes for a number property.",
+      "title": "Number",
+      "description": "Annotation for a number property.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
@@ -551,8 +551,8 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type"]
     },
     {
-      "title": "Integer Validation",
-      "description": "Validation attributes for an integer property.",
+      "title": "Integer ",
+      "description": "Annotation for an integer property.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
@@ -598,8 +598,8 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type"]
     },
     {
-      "title": "Boolean Validation",
-      "description": "Validation attributes for a boolean property.",
+      "title": "Boolean ",
+      "description": "Annotation for a boolean property.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
@@ -629,8 +629,8 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type", "default"]
     },
     {
-      "title": "Null Validation",
-      "description": "Validation attributes for a null field.",
+      "title": "Null",
+      "description": "Annotation for a null field.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
@@ -660,8 +660,8 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type"]
     },
     {
-      "title": "Array Validation",
-      "description": "Validation attributes for an array property.",
+      "title": "Array",
+      "description": "Annotation for an array property.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
@@ -698,8 +698,8 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type", "items"]
     },
     {
-      "title": "Object Validation",
-      "description": "Validation attributes for an object property.",
+      "title": "Object",
+      "description": "Annotation for an object property.",
       "type": ["object"],
       "properties": {
         "title": propertyTitleAnnotationSchema,
