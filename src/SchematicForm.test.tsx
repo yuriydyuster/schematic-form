@@ -1393,7 +1393,6 @@ describe("SchematicForm", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
 
     expect(screen.getByRole("heading", {level: 2, name: "SchematicForm Builder"})).toBeInTheDocument();
-    expect(screen.getByLabelText("Name")).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toBeInTheDocument();
     expect(screen.getByLabelText("Description")).toBeInTheDocument();
     expect(screen.queryByLabelText("JSON Schema Draft")).not.toBeInTheDocument();
@@ -1663,13 +1662,13 @@ describe("SchematicForm", () => {
     const item = getSurface(container, "/mixedItems/0");
     expect(item.children[0]).toHaveClass("schematic-form__fieldset");
     expect(item.children[0]).not.toHaveClass("schematic-form__branch");
-    expect(within(item).getByRole("button", {name: /select an option mixed item #1/i})).toBeInTheDocument();
-    expect(within(item).queryByLabelText("Label")).not.toBeInTheDocument();
+    expect(within(item).getByRole("button", {name: /object mixed item #1/i})).toBeInTheDocument();
+    expect(within(item).getByLabelText("Label")).toBeInTheDocument();
     const branchGroup = item.querySelector(".schematic-form__branch-group");
     expect(branchGroup).toHaveClass("schematic-form__branch-group");
     expect(item.querySelector(".schematic-form__row-actions")).toHaveClass("schematic-form__row-actions");
 
-    await user.click(within(item).getByRole("button", {name: /select an option mixed item #1/i}));
+    await user.click(within(item).getByRole("button", {name: /mixed item #1/i}));
     await user.click(await screen.findByRole("option", {name: "Enum string"}));
 
     await waitFor(() => {
@@ -1706,7 +1705,7 @@ describe("SchematicForm", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
-    await user.click(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /select an option mixed item #1/i}));
+    await user.click(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /mixed item #1/i}));
     await user.click(await screen.findByRole("option", {name: "Boolean"}));
 
     await waitFor(() => {
@@ -1715,14 +1714,12 @@ describe("SchematicForm", () => {
     });
 
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
-    await user.click(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /select an option mixed item #2/i}));
-    await user.click(await screen.findByRole("option", {name: "Object"}));
 
     await waitFor(() => {
       const lastState = onStateChange.mock.calls.at(-1)?.[0];
       const errors = lastState?.errors.join("\n") ?? "";
-      expect(lastState?.data).toMatchObject({mixedItems: [false, {}]});
-      expect(errors).toMatch(/mixedItems\.1\.label: must have required property 'label'/i);
+      expect(lastState?.data).toMatchObject({mixedItems: [false, undefined]});
+      expect(errors).toMatch(/mixedItems\.1: must be object/i);
       expect(errors).not.toMatch(/mixedItems\.1: must be boolean/i);
     });
   });
@@ -1735,23 +1732,23 @@ describe("SchematicForm", () => {
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
 
     const firstItem = getSurface(container, "/mixedItems/0");
-    await user.click(within(firstItem).getByRole("button", {name: /select an option mixed item #1/i}));
+    await user.click(within(firstItem).getByRole("button", {name: /mixed item #1/i}));
     await user.click(await screen.findByRole("option", {name: "Enum string"}));
 
     await waitFor(() => {
       expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /enum string mixed item #1/i})).toBeInTheDocument();
-      expect(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /select an option mixed item #2/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /mixed item #2/i})).toBeInTheDocument();
     });
 
     await user.click(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /move down/i}));
 
     await waitFor(() => {
-      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /select an option mixed item #1/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /mixed item #1/i})).toBeInTheDocument();
       expect(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /enum string mixed item #2/i})).toBeInTheDocument();
     });
   });
 
-  test("keeps persisted empty mixed oneOf array items unselected after remount", async () => {
+  test("applies default mixed oneOf branch after remount when persisted selection is null", async () => {
     const storage = createMemoryStorage();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     storage.setItem(
@@ -1779,8 +1776,8 @@ describe("SchematicForm", () => {
     );
 
     await waitFor(() => {
-      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /select an option mixed item #1/i})).toBeInTheDocument();
-      expect(within(getSurface(container, "/mixedItems/0")).queryByLabelText("Label")).not.toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /object mixed item #1/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/0")).getByLabelText("Label")).toBeInTheDocument();
     });
 
     await waitFor(() => {

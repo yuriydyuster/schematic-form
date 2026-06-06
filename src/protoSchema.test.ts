@@ -12,7 +12,6 @@ describe("proto schema converter", () => {
   test("converts root annotations and proto properties into classic JSON Schema", () => {
     const protoSchema = {
       $schema: JSON_SCHEMA_2020_12,
-      name: "CustomerProfile",
       title: "Customer profile",
       description: "Collect customer profile data.",
       type: "object",
@@ -45,7 +44,6 @@ describe("proto schema converter", () => {
 
     expect(protoSchemaToJsonSchema(protoSchema)).toEqual({
       $schema: JSON_SCHEMA_2020_12,
-      name: "CustomerProfile",
       title: "Customer profile",
       description: "Collect customer profile data.",
       type: "object",
@@ -74,7 +72,6 @@ describe("proto schema converter", () => {
   test("recursively converts object and array annotations", () => {
     const protoSchema = {
       $schema: JSON_SCHEMA_2020_12,
-      name: "TeamSchema",
       type: "object",
       properties: [
         {
@@ -152,7 +149,6 @@ describe("proto schema converter", () => {
   test("omits empty required and ignores blank property keys", () => {
     const protoSchema = {
       $schema: JSON_SCHEMA_2020_12,
-      name: "NicknameSchema",
       type: "object",
       properties: [
         {
@@ -170,7 +166,6 @@ describe("proto schema converter", () => {
 
     expect(protoSchemaToJsonSchema(protoSchema)).toEqual({
       $schema: JSON_SCHEMA_2020_12,
-      name: "NicknameSchema",
       type: "object",
       propertyOrdering: ["nickname"],
       properties: {
@@ -182,7 +177,6 @@ describe("proto schema converter", () => {
   test("rejects duplicate property keys", () => {
     const protoSchema = {
       $schema: JSON_SCHEMA_2020_12,
-      name: "DuplicateSchema",
       type: "object",
       properties: [
         {key: "name", required: false, propertyAnnotation: {type: "string"}},
