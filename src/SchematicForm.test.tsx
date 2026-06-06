@@ -4,7 +4,7 @@ import {describe, expect, test, vi} from "vitest";
 
 import {SchematicForm} from "./SchematicForm";
 import {createDraftPayload, createSchemaFingerprint} from "./persistence";
-import {kitchenSinkSchema, kitchenSinkSchemaOld} from "./sampleSchemas";
+import {kitchenSinkSchema, kitchenSinkSchemaInitialValue, kitchenSinkSchemaOld} from "./sampleSchemas";
 import type {JsonSchema, SchematicFormDraftStorage, SchematicFormState} from "./types";
 
 function expectBefore(first: Element, second: Element) {
@@ -430,7 +430,7 @@ describe("SchematicForm", () => {
       expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1, steppedScore: 10});
     });
 
-    fireEvent.click(screen.getByRole("button", {name: /reset/i}));
+    fireEvent.click(screen.getByRole("button", {name: /clean/i}));
     await waitFor(() => {
       expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
     });
@@ -825,7 +825,7 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Name")).toHaveValue("Controlled value");
   });
 
-  test("resets uncontrolled fields, branch choices, and validation UI", async () => {
+  test("cleans uncontrolled fields, branch choices, and validation UI", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const schema = {
@@ -889,7 +889,9 @@ describe("SchematicForm", () => {
       });
     });
 
-    await user.click(screen.getByRole("button", {name: /reset/i}));
+    expect(screen.queryByRole("button", {name: /reset/i})).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: /clean/i}));
 
     expect(screen.getByLabelText("Name")).toHaveValue("");
     expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
@@ -899,6 +901,93 @@ describe("SchematicForm", () => {
       const lastState = onStateChange.mock.calls.at(-1)?.[0];
       expect(lastState?.data).not.toHaveProperty("name");
       expect(lastState?.data).not.toHaveProperty("payment");
+    });
+  });
+
+  test("infers branch selections from explicit initial values and resets back to them", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Initial branch form",
+      required: ["name", "payment"],
+      properties: {
+        name: {
+          type: "string",
+          title: "Name",
+          minLength: 1,
+        },
+        payment: {
+          title: "Payment method",
+          oneOf: [
+            {
+              type: "object",
+              title: "Card",
+              required: ["cardNumber"],
+              properties: {
+                cardNumber: {
+                  type: "string",
+                  title: "Card number",
+                },
+              },
+            },
+            {
+              type: "object",
+              title: "Bank transfer",
+              required: ["iban"],
+              properties: {
+                iban: {
+                  type: "string",
+                  title: "IBAN",
+                },
+              },
+            },
+          ],
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(
+      <SchematicForm
+        defaultValue={{name: "Ada", payment: {iban: "DE89"}}}
+        schema={schema}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", {name: /bank transfer payment method/i})).toBeInTheDocument();
+    expect(screen.getByLabelText("IBAN")).toHaveValue("DE89");
+    expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Grace");
+    await user.click(screen.getByRole("button", {name: /bank transfer payment method/i}));
+    await user.click(await screen.findByRole("option", {name: "Card"}));
+    await user.type(await screen.findByLabelText("Card number"), "4242");
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({
+        name: "Grace",
+        payment: {cardNumber: "4242"},
+      });
+    });
+
+    await user.click(screen.getByRole("button", {name: /clean/i}));
+
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.queryByLabelText("IBAN")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: /select an option payment method/i})).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: /reset/i}));
+
+    expect(screen.getByLabelText("Name")).toHaveValue("Ada");
+    expect(screen.getByRole("button", {name: /bank transfer payment method/i})).toBeInTheDocument();
+    expect(screen.getByLabelText("IBAN")).toHaveValue("DE89");
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toEqual({name: "Ada", payment: {iban: "DE89"}});
     });
   });
 
@@ -1303,7 +1392,7 @@ describe("SchematicForm", () => {
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
 
-    expect(screen.getByRole("heading", {level: 2, name: "Form Meta Schema"})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {level: 2, name: "SchematicForm Builder"})).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toBeInTheDocument();
     expect(screen.getByLabelText("Description")).toBeInTheDocument();
@@ -1324,6 +1413,25 @@ describe("SchematicForm", () => {
     expect(within(item).getByText("Property #1")).toBeInTheDocument();
     expect(within(item).getByText("A single recursive property definition.")).toBeInTheDocument();
     expect(within(item).getByLabelText("Key")).toBeInTheDocument();
+  });
+
+  test("renders initial proto-schema branch values as selected and expanded controls", () => {
+    const {container} = render(<SchematicForm defaultValue={kitchenSinkSchemaInitialValue} schema={kitchenSinkSchema} />);
+
+    const fullName = getSurface(container, "/properties/0");
+    expect(within(fullName).getByLabelText("Key")).toHaveValue("fullName");
+    expect(within(fullName).getByRole("button", {name: /string property type/i})).toBeInTheDocument();
+    expect(container.querySelector('[data-sf-path="/properties/0/propertyAnnotation/minLength"] input')).toHaveValue("2");
+
+    const company = getSurface(container, "/properties/3");
+    expect(container.querySelector('[data-sf-path="/properties/3/key"] input')).toHaveValue("company");
+    expect(within(company).getByRole("button", {name: /object property type/i})).toBeInTheDocument();
+    expect(within(getSurface(container, "/properties/3/propertyAnnotation/properties")).getByRole("button", {name: /add property/i})).toBeInTheDocument();
+
+    const topics = getSurface(container, "/properties/4");
+    expect(container.querySelector('[data-sf-path="/properties/4/key"] input')).toHaveValue("topics");
+    expect(within(topics).getByRole("button", {name: /array property type/i})).toBeInTheDocument();
+    expect(within(getSurface(container, "/properties/4/propertyAnnotation/items")).getByRole("button", {name: /string items/i})).toBeInTheDocument();
   });
 
   test("validates an added local ref item that keeps its nested branch unselected", async () => {
@@ -1810,22 +1918,40 @@ describe("SchematicForm", () => {
     expect(removeButton).toHaveTextContent(/remove/i);
   });
 
-  test("renders reset and submit as full-width form actions", () => {
+  test("renders clean and submit as full-width form actions without explicit initial values", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     const actions = container.querySelector(".schematic-form__form-actions");
     expect(actions).toBeInTheDocument();
     expect(actions).toHaveClass("schematic-form__form-actions");
 
+    const cleanButton = within(actions as HTMLElement).getByRole("button", {name: /clean/i});
+    const submitButton = within(actions as HTMLElement).getByRole("button", {name: "Submit"});
+
+    expect(within(actions as HTMLElement).queryByRole("button", {name: /reset/i})).not.toBeInTheDocument();
+    expect(cleanButton).toHaveClass("button--secondary", "button--full-width");
+    expect(cleanButton).not.toHaveClass("button--icon-only");
+    expect(cleanButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
+    expect(cleanButton).toHaveTextContent("Clean");
+    expect(submitButton).toHaveClass("button--full-width");
+    expect(submitButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
+    expectBefore(cleanButton, submitButton);
+  });
+
+  test("renders reset between clean and submit when explicit initial values are set", () => {
+    const {container} = render(<SchematicForm defaultValue={{projectName: "Ada"}} schema={kitchenSinkSchemaOld} />);
+
+    const actions = container.querySelector(".schematic-form__form-actions");
+    expect(actions).toBeInTheDocument();
+
+    const cleanButton = within(actions as HTMLElement).getByRole("button", {name: /clean/i});
     const resetButton = within(actions as HTMLElement).getByRole("button", {name: /reset/i});
     const submitButton = within(actions as HTMLElement).getByRole("button", {name: "Submit"});
 
+    expect(cleanButton).toHaveClass("button--secondary", "button--full-width");
     expect(resetButton).toHaveClass("button--secondary", "button--full-width");
-    expect(resetButton).not.toHaveClass("button--icon-only");
     expect(resetButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
-    expect(resetButton).toHaveTextContent("Reset");
-    expect(submitButton).toHaveClass("button--full-width");
-    expect(submitButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
+    expectBefore(cleanButton, resetButton);
     expectBefore(resetButton, submitButton);
   });
 

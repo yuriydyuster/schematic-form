@@ -29,7 +29,7 @@ The package name is `@schematic-form/react`. It builds ESM, CommonJS, TypeScript
 
 ## Module Responsibilities
 
-- `src/SchematicForm.tsx` owns the React component, recursive rendering, controlled/uncontrolled state, branch selection, draft hydration, form submit/reset behavior, and focus management.
+- `src/SchematicForm.tsx` owns the React component, recursive rendering, controlled/uncontrolled state, branch selection, draft hydration, form submit/clean/reset behavior, and focus management.
 - `src/types.ts` defines the public and internal TypeScript model: schemas, paths, validation issues, form state, props, and persistence options.
 - `src/schema.ts` interprets supported schema features for rendering: type inference, labels, field ordering, enum handling, default values, display-only fields, branch metadata, and format support.
 - `src/refResolver.ts` resolves same-document `$ref` pointers lazily against the root schema for rendering and schema helper decisions.
@@ -44,12 +44,14 @@ The package name is `@schematic-form/react`. It builds ESM, CommonJS, TypeScript
 
 1. `SchematicForm` receives a schema plus optional `value`, `defaultValue`, callbacks, validation settings, messages, persistence config, custom renderer, and error formatter.
 2. If `value` is provided, the form is controlled and `value` remains the source of truth. Otherwise the form stores internal data initialized from `defaultValue` or schema defaults.
-3. Draft persistence is enabled only for uncontrolled forms with a `persistence` prop. A matching persisted draft hydrates `data`, `branchSelection`, and `branchValueCache` after mount.
-4. The active validation schema is derived from the original schema plus current branch selections. Only selected `oneOf`/`anyOf` branches are validated.
-5. Ajv validates current data and produces public state `{data, isValid, errors}`.
-6. `renderSchema` recursively renders the schema tree, resolving local refs lazily at each render node. Field updates use path helpers to immutably write or delete nested data.
-7. `onChange` receives raw data changes. `onStateChange` receives public state after draft hydration. `onSubmit` receives the latest public state and the form event.
-8. Valid submit clears a persisted draft by default. Invalid submit shows an error summary and focuses the first invalid field.
+3. Branch selections are inferred from populated data for initial/default/controlled values, with explicit user selections taking precedence.
+4. Draft persistence is enabled only for uncontrolled forms with a `persistence` prop. A matching persisted draft hydrates `data`, `branchSelection`, and `branchValueCache` after mount.
+5. The active validation schema is derived from the original schema plus current branch selections. Only selected `oneOf`/`anyOf` branches are validated.
+6. Ajv validates current data and produces public state `{data, isValid, errors}`.
+7. `renderSchema` recursively renders the schema tree, resolving local refs lazily at each render node. Field updates use path helpers to immutably write or delete nested data.
+8. `onChange` receives raw data changes. `onStateChange` receives public state after draft hydration. `onSubmit` receives the latest public state and the form event.
+9. Clean clears current form values back to schema-materialized empty data. Reset is shown only when `defaultValue` is explicitly provided and restores that initial data.
+10. Valid submit clears a persisted draft by default. Invalid submit shows an error summary and focuses the first invalid field.
 
 ## Supported Business Rules
 
@@ -67,6 +69,7 @@ SchematicForm Beta intentionally supports a bounded JSON Schema subset plus a fe
 - Non-unique arrays of string enums render as generic repeatable rows, with each item rendered as a dropdown.
 - Generic arrays render repeatable rows with add, move, and remove actions. `maxItems` disables adding when the limit is reached.
 - `oneOf` and `anyOf` render as a branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`.
+- Populated initial, controlled, and draft data infer matching branch dropdown selections so visible branch controls stay aligned with data.
 - Inactive branch values are cached internally so users can switch back without leaking inactive values into submitted data.
 - `uniqueItems` is enforced for arrays whose item schema is a string enum.
 - Empty strings are removed from data unless the schema explicitly sets `minLength: 0`.
@@ -126,7 +129,7 @@ Persistence is deliberately best-effort: storage failures must not break the for
 
 Automated tests run with Vitest in jsdom:
 
-- `src/SchematicForm.test.tsx` covers rendered behavior, accessibility-facing labels/roles, validation UI, branch switching, arrays, draft hydration, submit/reset behavior, and callback state.
+- `src/SchematicForm.test.tsx` covers rendered behavior, accessibility-facing labels/roles, validation UI, branch switching, arrays, draft hydration, submit/clean/reset behavior, and callback state.
 - `src/schema.test.ts` covers schema interpretation and defaults.
 - `src/validation.test.ts` covers schema sanitization and Ajv error mapping.
 - `src/persistence.test.ts` covers draft payload parsing, fingerprints, and storage adapters.

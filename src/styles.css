@@ -10,7 +10,8 @@
 }
 
 .schematic-form__form-actions {
-  @apply grid grid-cols-2 gap-1;
+  @apply grid gap-1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 }
 
 .schematic-form__surface {

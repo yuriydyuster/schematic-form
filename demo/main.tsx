@@ -5,7 +5,7 @@ import {Copy} from "@gravity-ui/icons";
 
 import {SchematicForm, type JsonSchema, type SchematicFormState} from "../src";
 import {protoSchemaToJsonSchema, type ProtoSchemaObject} from "../src/protoSchema";
-import {kitchenSinkSchema} from "../src/sampleSchemas";
+import {kitchenSinkSchema, kitchenSinkSchemaInitialValue} from "../src/sampleSchemas";
 import "./styles.css";
 
 function App() {
@@ -36,6 +36,7 @@ function App() {
       <section className="demo-form">
         <SchematicForm
           schema={kitchenSinkSchema}
+          defaultValue={kitchenSinkSchemaInitialValue}
           persistence={{key: "schematic-form:proto-schema-demo"}}
           validationMode="hybrid"
           onStateChange={(nextState) => setState(nextState)}
@@ -65,43 +66,49 @@ function App() {
         <h2>State</h2>
         <pre>{JSON.stringify(state, null, 2)}</pre>
       </aside>
-      <Drawer.Root state={previewDrawerState}>
-        {convertedSchema ? (
-          <Drawer.Backdrop>
-            <Drawer.Content placement="right">
-              <Drawer.Dialog aria-label="Generated Form Preview" className="demo-drawer">
-                <Drawer.CloseTrigger />
-                <Drawer.Body className="demo-drawer__body">
-                  <Tabs defaultSelectedKey="form" className="demo-drawer__tabs">
-                    <Tabs.List>
-                      <Tabs.Tab id="form">Form</Tabs.Tab>
-                      <Tabs.Tab id="json">JSON</Tabs.Tab>
+      {convertedSchema ? (
+        <Drawer.Backdrop isOpen={previewDrawerState.isOpen} onOpenChange={previewDrawerState.setOpen}>
+          <Drawer.Content placement="right">
+            <Drawer.Dialog aria-label="Generated Form Preview" className="demo-drawer">
+              <Drawer.CloseTrigger />
+              <Drawer.Body className="demo-drawer__body">
+                <Tabs defaultSelectedKey="form" className="demo-drawer__tabs">
+                  <Tabs.ListContainer>
+                    <Tabs.List aria-label="Generated preview sections">
+                      <Tabs.Tab id="form">
+                        Form
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                      <Tabs.Tab id="json">
+                        JSON
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
                     </Tabs.List>
-                    <Tabs.Panel id="form" className="demo-drawer__tabpanel">
-                      <SchematicForm key={previewKey} schema={convertedSchema} validationMode="hybrid" />
-                    </Tabs.Panel>
-                    <Tabs.Panel id="json" className="demo-drawer__tabpanel">
-                      <Surface className="demo-json-surface">
-                        <Button
-                          aria-label="Copy generated JSON schema"
-                          className="demo-json-copy"
-                          isIconOnly
-                          type="button"
-                          variant="secondary"
-                          onPress={copyPreviewJson}
-                        >
-                          <Copy aria-hidden="true" focusable="false" />
-                        </Button>
-                        <pre>{previewJson}</pre>
-                      </Surface>
-                    </Tabs.Panel>
-                  </Tabs>
-                </Drawer.Body>
-              </Drawer.Dialog>
-            </Drawer.Content>
-          </Drawer.Backdrop>
-        ) : null}
-      </Drawer.Root>
+                  </Tabs.ListContainer>
+                  <Tabs.Panel id="form" className="demo-drawer__tabpanel">
+                    <SchematicForm key={previewKey} schema={convertedSchema} validationMode="hybrid" />
+                  </Tabs.Panel>
+                  <Tabs.Panel id="json" className="demo-drawer__tabpanel">
+                    <Surface className="demo-json-surface">
+                      <Button
+                        aria-label="Copy generated JSON schema"
+                        className="demo-json-copy"
+                        isIconOnly
+                        type="button"
+                        variant="secondary"
+                        onPress={copyPreviewJson}
+                      >
+                        <Copy aria-hidden="true" focusable="false" />
+                      </Button>
+                      <pre>{previewJson}</pre>
+                    </Surface>
+                  </Tabs.Panel>
+                </Tabs>
+              </Drawer.Body>
+            </Drawer.Dialog>
+          </Drawer.Content>
+        </Drawer.Backdrop>
+      ) : null}
     </main>
   );
 }

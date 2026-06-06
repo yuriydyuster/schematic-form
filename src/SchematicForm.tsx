@@ -1,5 +1,5 @@
 import * as HeroUI from "@heroui/react";
-import {ArrowDown, ArrowRotateLeft, ArrowUp, Envelope, Globe, CircleCheck, Plus, TrashBin} from "@gravity-ui/icons";
+import {ArrowDown, ArrowRotateLeft, ArrowUp, Envelope, Eraser, Globe, CircleCheck, Plus, TrashBin} from "@gravity-ui/icons";
 import {
   getLocalTimeZone,
   parseAbsoluteToLocal,
@@ -157,6 +157,7 @@ const defaultMessages = {
   moveUp: "Move up",
   moveDown: "Move down",
   remove: "Remove",
+  clean: "Clean",
   reset: "Reset",
   submit: "Submit",
   errorSummaryTitle: "Please review the highlighted fields.",
@@ -231,6 +232,8 @@ export function SchematicForm<TData = unknown>({
       : defaultValueForSchema(jsonSchema, {rootSchema: jsonSchema}) ?? {};
     return materializeRequiredImplicitValues(jsonSchema, baseData, jsonSchema);
   }, [defaultValue, jsonSchema]);
+  const cleanData = useMemo(() => materializeRequiredImplicitValues(jsonSchema, {}, jsonSchema), [jsonSchema]);
+  const initialBranchMetadata = useMemo(() => inferBranchMetadata(jsonSchema, initialData, jsonSchema), [initialData, jsonSchema]);
   const [internalData, setInternalData] = useState<unknown>(initialData);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
@@ -257,9 +260,14 @@ export function SchematicForm<TData = unknown>({
   const clearPersistedDraftOnValidSubmit = persistence?.clearOnValidSubmit ?? true;
   const [draftHydrated, setDraftHydrated] = useState(!shouldPersistDraft);
   const data = (isControlled ? value : internalData) as unknown;
+  const inferredBranchMetadata = useMemo(() => inferBranchMetadata(jsonSchema, data, jsonSchema), [data, jsonSchema]);
+  const effectiveBranchSelection = useMemo(
+    () => ({...inferredBranchMetadata.branchSelection, ...branchSelection}),
+    [branchSelection, inferredBranchMetadata.branchSelection],
+  );
   const validationSchema = useMemo(
-    () => applyBranchSelections(jsonSchema, branchSelection, [], jsonSchema),
-    [branchSelection, jsonSchema],
+    () => applyBranchSelections(jsonSchema, effectiveBranchSelection, [], jsonSchema),
+    [effectiveBranchSelection, jsonSchema],
   );
   const formLabel = getRootSchemaLabel(jsonSchema);
 
@@ -320,7 +328,8 @@ export function SchematicForm<TData = unknown>({
     if (draft) {
       const restoredData = restoreEmptyBranchSelectionValues(draft.data, draft.branchSelection);
       setInternalData(materializeRequiredImplicitValues(jsonSchema, restoredData, jsonSchema));
-      setBranchSelection(draft.branchSelection);
+      const restoredBranchMetadata = inferBranchMetadata(jsonSchema, restoredData, jsonSchema);
+      setBranchSelection({...restoredBranchMetadata.branchSelection, ...draft.branchSelection});
       setBranchValueCache(draft.branchValueCache);
     }
     setDraftHydrated(true);
@@ -336,7 +345,7 @@ export function SchematicForm<TData = unknown>({
     const payload = createDraftPayload({
       schemaFingerprint,
       data,
-      branchSelection,
+      branchSelection: effectiveBranchSelection,
       branchValueCache,
     });
     latestDraftRef.current = {storage: draftStorage, key: draftKey, payload};
@@ -357,6 +366,7 @@ export function SchematicForm<TData = unknown>({
     draftHydrated,
     draftKey,
     draftStorage,
+    effectiveBranchSelection,
     schemaFingerprint,
     shouldPersistDraft,
   ]);
@@ -488,15 +498,24 @@ export function SchematicForm<TData = unknown>({
     ],
   );
 
-  const handleReset = useCallback(() => {
+  const resetInteractionState = useCallback(() => {
     setTouched({});
     setSubmitted(false);
-    setBranchSelection({});
     setBranchValueCache({});
     setRowIdsByPointer({});
     setObjectExpandedByPointer({});
     rowIdCounter.current = 0;
+  }, []);
 
+  const handleClean = useCallback(() => {
+    resetInteractionState();
+    setBranchSelection({});
+    commitData(cleanData);
+  }, [cleanData, commitData, resetInteractionState]);
+
+  const handleReset = useCallback(() => {
+    resetInteractionState();
+    setBranchSelection(initialBranchMetadata.branchSelection);
     if (draftStorage && draftKey) {
       clearScheduledDraftSave();
       latestDraftRef.current = null;
@@ -504,7 +523,15 @@ export function SchematicForm<TData = unknown>({
     }
 
     commitData(initialData);
-  }, [clearScheduledDraftSave, commitData, draftKey, draftStorage, initialData]);
+  }, [
+    clearScheduledDraftSave,
+    commitData,
+    draftKey,
+    draftStorage,
+    initialBranchMetadata.branchSelection,
+    initialData,
+    resetInteractionState,
+  ]);
 
   const context: RendererContext<TData> = {
     data,
@@ -519,7 +546,7 @@ export function SchematicForm<TData = unknown>({
     messages: mergedMessages,
     rowIdsByPointer,
     setBranchSelection,
-    branchSelection,
+    branchSelection: effectiveBranchSelection,
     setBranchValueCache,
     branchValueCache,
     setFieldValue,
@@ -552,10 +579,16 @@ export function SchematicForm<TData = unknown>({
         ) : null}
         {renderSchema(jsonSchema, [], false, context)}
         <div className="schematic-form__form-actions">
-          <Button fullWidth isDisabled={disabled || isSubmitting} type="button" variant="secondary" onPress={handleReset}>
-            <ButtonIcon icon={ArrowRotateLeft} />
-            {mergedMessages.reset}
+          <Button fullWidth isDisabled={disabled || isSubmitting} type="button" variant="secondary" onPress={handleClean}>
+            <ButtonIcon icon={Eraser} />
+            {mergedMessages.clean}
           </Button>
+          {defaultValue !== undefined ? (
+            <Button fullWidth isDisabled={disabled || isSubmitting} type="button" variant="secondary" onPress={handleReset}>
+              <ButtonIcon icon={ArrowRotateLeft} />
+              {mergedMessages.reset}
+            </Button>
+          ) : null}
           <Button fullWidth isDisabled={disabled} isPending={isSubmitting} type="submit">
             {({isPending}: {isPending: boolean}) => (
               <>
@@ -2019,6 +2052,153 @@ function restoreEmptyBranchSelectionValues(data: unknown, branchSelection: Branc
     if (selectedIndex !== null) return nextData;
     return setAtPath(nextData, fromPointer(pointer), undefined);
   }, data);
+}
+
+function inferBranchMetadata(
+  schema: JsonSchema,
+  data: unknown,
+  rootSchema: JsonSchema = schema,
+  path: PathSegment[] = [],
+  refStack: string[] = [],
+): {branchSelection: BranchSelectionState; branchValueCache: BranchValueCache} {
+  const branchSelection: BranchSelectionState = {};
+  const branchValueCache: BranchValueCache = {};
+  inferBranchMetadataInto(schema, data, rootSchema, path, refStack, branchSelection);
+  return {branchSelection, branchValueCache};
+}
+
+function inferBranchMetadataInto(
+  schema: JsonSchema,
+  data: unknown,
+  rootSchema: JsonSchema,
+  path: PathSegment[],
+  refStack: string[],
+  branchSelection: BranchSelectionState,
+) {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+
+  const branch = getBranchSchemas(schema, {rootSchema, refStack: resolved.refStack});
+  if (branch) {
+    const selectedIndex = inferBranchIndexFromValue(data, branch.branches, rootSchema, branch.refStack);
+    if (selectedIndex == null) return;
+    branchSelection[toPointer(path)] = selectedIndex;
+    inferBranchMetadataInto(branch.branches[selectedIndex], data, rootSchema, path, branch.refStack, branchSelection);
+    return;
+  }
+
+  const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
+  if (type === "object" && isRecord(data)) {
+    for (const key of getOrderedPropertyKeys(schema, {rootSchema, refStack: resolved.refStack})) {
+      const child = schema.properties?.[key];
+      if (!child || isDisplayOnlySchema(child, {rootSchema, refStack: resolved.refStack})) continue;
+      inferBranchMetadataInto(child, data[key], rootSchema, [...path, key], [], branchSelection);
+    }
+    return;
+  }
+
+  if (type === "array" && Array.isArray(data)) {
+    data.forEach((item, index) => {
+      const itemSchema = Array.isArray(schema.items)
+        ? schema.items[index]
+        : getSingleArrayItemSchema(schema, rootSchema, resolved.refStack);
+      if (!itemSchema) return;
+      inferBranchMetadataInto(itemSchema, item, rootSchema, [...path, index], [], branchSelection);
+    });
+  }
+}
+
+function inferBranchIndexFromValue(
+  value: unknown,
+  branches: JsonSchema[],
+  rootSchema: JsonSchema,
+  refStack: string[] = [],
+): number | undefined {
+  if (value === undefined) return undefined;
+
+  let bestIndex: number | undefined;
+  let bestScore = -1;
+
+  branches.forEach((branch, index) => {
+    const score = scoreBranchValueCompatibility(value, branch, rootSchema, refStack);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestScore >= 0 ? bestIndex : undefined;
+}
+
+function scoreBranchValueCompatibility(
+  value: unknown,
+  schema: JsonSchema,
+  rootSchema: JsonSchema,
+  refStack: string[] = [],
+): number {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  schema = resolved.schema;
+
+  if (!isValueCompatibleWithSchemaForInference(value, schema, rootSchema, resolved.refStack)) return -1;
+
+  if (schema.enum?.length) {
+    return schema.enum.some((option) => primitiveValuesEqual(option, value)) ? 100 : -1;
+  }
+
+  const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
+  if (type !== "object") return 1;
+  if (!isRecord(value)) return -1;
+
+  let score = 1;
+  let matchedSingleEnumDiscriminator = false;
+  const required = new Set(schema.required ?? []);
+  const properties = schema.properties ?? {};
+
+  for (const [key, child] of Object.entries(properties)) {
+    const hasValue = Object.prototype.hasOwnProperty.call(value, key);
+    const childResolved = resolveSchemaWithRoot(child, rootSchema, resolved.refStack);
+    const singleEnumValue = getSingleEnumValue(childResolved.schema, {rootSchema, refStack: childResolved.refStack});
+
+    if (singleEnumValue !== undefined) {
+      if (!hasValue) {
+        if (required.has(key)) return -1;
+        continue;
+      }
+      if (!primitiveValuesEqual(singleEnumValue, value[key])) return -1;
+      matchedSingleEnumDiscriminator = true;
+      score += 100;
+      continue;
+    }
+
+    if (!hasValue) {
+      if (required.has(key)) return -1;
+      continue;
+    }
+
+    if (!isValueCompatibleWithSchemaForInference(value[key], childResolved.schema, rootSchema, childResolved.refStack)) {
+      if (matchedSingleEnumDiscriminator) continue;
+      return -1;
+    }
+    score += required.has(key) ? 10 : 3;
+  }
+
+  return score;
+}
+
+function isValueCompatibleWithSchemaForInference(
+  value: unknown,
+  schema: JsonSchema,
+  rootSchema: JsonSchema,
+  refStack: string[] = [],
+): boolean {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  const branch = getBranchSchemas(resolved.schema, {rootSchema, refStack: resolved.refStack});
+  if (branch) return inferBranchIndexFromValue(value, branch.branches, rootSchema, branch.refStack) != null;
+  return isValueCompatibleWithSchemaType(value, resolved.schema, rootSchema, resolved.refStack);
+}
+
+function primitiveValuesEqual(left: JsonPrimitive, right: unknown): boolean {
+  return left === right;
 }
 
 function resolveRenderSchema<TData>(

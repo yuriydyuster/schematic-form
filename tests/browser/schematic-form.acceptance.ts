@@ -1,6 +1,7 @@
 import {expect, test, type Locator, type Page} from "@playwright/test";
 
 const draftKey = "schematic-form:proto-schema-demo";
+const initialPropertyCount = 6;
 
 function collectRuntimeErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -44,7 +45,7 @@ test("loads the demo without browser runtime errors", async ({page}) => {
 
   await resetDemo(page);
 
-  await expect(page.getByRole("heading", {level: 2, name: "Form Meta Schema"})).toBeVisible();
+  await expect(page.getByRole("heading", {level: 2, name: "SchematicForm Builder"})).toBeVisible();
   await expect(page.getByLabel("Name")).toBeVisible();
   await expect(page.getByLabel("Title")).toBeVisible();
   await expect(page.getByLabel("Description")).toBeVisible();
@@ -52,7 +53,15 @@ test("loads the demo without browser runtime errors", async ({page}) => {
   await expect(page.getByLabel("Type")).toHaveCount(0);
   await expect(page.getByLabel("Current form state")).toBeVisible();
   await expect(page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
-  await expect(page.getByText("A meta schema for describing a form as an array of recursive field definitions.")).toBeVisible();
+  await expect(page.getByText("Create your own form using this JSON schema editor.")).toBeVisible();
+  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("fullName");
+  await expect(page.locator('[data-sf-path="/properties/3"]').getByLabel("Key")).toHaveValue("company");
+  await expect(page.locator('[data-sf-path="/properties/4"]').getByLabel("Key")).toHaveValue("topics");
+  await expect(page.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /string property type/i})).toBeVisible();
+  await expect(page.locator('[data-sf-path="/properties/3"]').getByRole("button", {name: /object property type/i})).toBeVisible();
+  await expect(page.locator('[data-sf-path="/properties/3/propertyAnnotation/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
+  await expect(page.locator('[data-sf-path="/properties/4"]').getByRole("button", {name: /array property type/i})).toBeVisible();
+  await expect(page.locator('[data-sf-path="/properties/4/propertyAnnotation/items"]').getByRole("button", {name: /string items/i})).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });
 
@@ -60,6 +69,7 @@ test("invalid submit shows the summary and focuses the first invalid field", asy
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
+  await page.getByLabel("Name").fill("");
   await page.getByRole("button", {name: "Submit"}).click();
 
   await expect(page.getByRole("alert")).toContainText("Please review the highlighted fields.");
@@ -72,19 +82,19 @@ test("recursive array rows add, move, and remove while preserving sibling values
 
   await resetDemo(page);
 
-  await addField(page, 0);
-  await page.locator('[data-sf-path="/properties/0"]').getByLabel("Key").fill("first");
-  await addField(page, 1);
-  await page.locator('[data-sf-path="/properties/1"]').getByLabel("Key").fill("second");
+  await addField(page, initialPropertyCount);
+  await page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key").fill("first");
+  await addField(page, initialPropertyCount + 1);
+  await page.locator(`[data-sf-path="/properties/${initialPropertyCount + 1}"]`).getByLabel("Key").fill("second");
 
-  await page.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /move down/i}).click();
+  await page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByRole("button", {name: /move down/i}).click();
 
-  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("second");
-  await expect(page.locator('[data-sf-path="/properties/1"]').getByLabel("Key")).toHaveValue("first");
+  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key")).toHaveValue("second");
+  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount + 1}"]`).getByLabel("Key")).toHaveValue("first");
 
-  await page.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /remove/i}).click();
+  await page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByRole("button", {name: /remove/i}).click();
 
-  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("first");
+  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key")).toHaveValue("first");
   await expect(page.getByLabel("Current form state").locator("pre")).toContainText('"key": "first"');
   await expectNoRuntimeErrors(errors);
 });
@@ -93,7 +103,7 @@ test("branch selectors switch and validate only the active branch", async ({page
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
-  const row = await addField(page, 0);
+  const row = await addField(page, initialPropertyCount);
   await selectValidation(page, row, "Array");
 
   await expect(row.getByText("Items", {exact: true})).toBeVisible();
@@ -112,7 +122,7 @@ test("valid proto-schema submit opens a generated form preview drawer", async ({
   await resetDemo(page);
   await page.getByLabel("Name").fill("GeneratedCustomer");
   await page.getByLabel("Title").fill("Generated Customer");
-  const row = await addField(page, 0);
+  const row = await addField(page, initialPropertyCount);
   await row.getByLabel("Key").fill("customerName");
   await selectValidation(page, row, "String");
   await row.getByLabel("Title").fill("Customer name");
@@ -134,7 +144,7 @@ test("draft persistence restores uncontrolled form data after reload", async ({p
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
-  const row = await addField(page, 0);
+  const row = await addField(page, initialPropertyCount);
   await row.getByLabel("Key").fill("persistent_key");
   await page.waitForFunction(
     (key) => window.localStorage.getItem(key)?.includes("persistent_key"),
@@ -143,7 +153,7 @@ test("draft persistence restores uncontrolled form data after reload", async ({p
 
   await page.reload();
 
-  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("persistent_key");
+  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key")).toHaveValue("persistent_key");
   await expect(page.getByLabel("Current form state").locator("pre")).toContainText("persistent_key");
   await expectNoRuntimeErrors(errors);
 });

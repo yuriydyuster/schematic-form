@@ -224,7 +224,7 @@ describe("SchematicForm collapsible object surfaces", () => {
 
   test("renders collapsible toggles for selected object branch variants", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={branchSchema} defaultValue={{delivery: {}}} />);
+    const {container} = render(<SchematicForm schema={branchSchema} />);
 
     const branch = getSurface(container, "/delivery");
     await user.click(within(branch).getByRole("button", {name: /select an option delivery/i}));
@@ -373,7 +373,7 @@ describe("SchematicForm collapsible object surfaces", () => {
 
   test("resets collapsed object state when the form is reset", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={profileSchema} />);
+    const {container} = render(<SchematicForm schema={profileSchema} defaultValue={{owner: {}}} />);
 
     const owner = getSurface(container, "/owner");
     await user.click(within(owner).getByRole("button", {name: "Collapse Owner"}));

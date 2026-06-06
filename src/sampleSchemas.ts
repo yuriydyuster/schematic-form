@@ -1,3 +1,4 @@
+import {JSON_SCHEMA_2020_12, type ProtoSchemaObject} from "./protoSchema";
 import type {JsonSchema} from "./types";
 
 export const kitchenSinkSchemaOld = {
@@ -785,8 +786,8 @@ export const kitchenSinkSchemaMetaOld = {
 
 export const kitchenSinkSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Form Meta Schema",
-  "description": "A meta schema for describing a form as an array of recursive field definitions.",
+  "title": "SchematicForm Builder",
+  "description": "Create your own form using this JSON schema editor.",
   "type": "object",
   "propertyOrdering": ["$schema", "name", "title", "description", "type", "properties", "additionalProperties"],
   "properties": {
@@ -859,3 +860,106 @@ export const kitchenSinkSchema = {
     "propertyAnnotation": propertyAnnotationSchema
   }
 } satisfies JsonSchema;
+
+export const kitchenSinkSchemaInitialValue = {
+  $schema: JSON_SCHEMA_2020_12,
+  name: "contactRequest",
+  title: "Contact Request",
+  description: "Collect contact details and communication preferences.",
+  type: "object",
+  properties: [
+    {
+      key: "fullName",
+      required: true,
+      propertyAnnotation: {
+        type: "string",
+        title: "Full name",
+        description: "The person's full name.",
+        minLength: 2,
+        maxLength: 120,
+      },
+    },
+    {
+      key: "email",
+      required: true,
+      propertyAnnotation: {
+        type: "string",
+        title: "Email",
+        description: "A reachable email address.",
+        format: "email",
+      },
+    },
+    {
+      key: "subscribe",
+      required: false,
+      propertyAnnotation: {
+        type: "boolean",
+        title: "Subscribe",
+        description: "Whether to receive product updates.",
+        default: false,
+      },
+    },
+    {
+      key: "company",
+      required: false,
+      propertyAnnotation: {
+        type: "object",
+        title: "Company",
+        description: "Optional company details for business inquiries.",
+        properties: [
+          {
+            key: "name",
+            required: true,
+            propertyAnnotation: {
+              type: "string",
+              title: "Company name",
+              description: "The organization this person represents.",
+              minLength: 1,
+              maxLength: 120,
+            },
+          },
+          {
+            key: "website",
+            required: false,
+            propertyAnnotation: {
+              type: "string",
+              title: "Website",
+              description: "The organization's public website.",
+              format: "uri",
+            },
+          },
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
+      key: "topics",
+      required: false,
+      propertyAnnotation: {
+        type: "array",
+        title: "Topics",
+        description: "Subjects the person wants to discuss.",
+        items: {
+          type: "string",
+          title: "Topic",
+          description: "A single discussion topic.",
+          enum: ["Product", "Pricing", "Support", "Partnership"],
+        },
+        uniqueItems: true,
+      },
+    },
+    {
+      key: "urgency",
+      required: true,
+      propertyAnnotation: {
+        type: "integer",
+        title: "Urgency",
+        description: "How quickly the team should respond.",
+        minimum: 1,
+        maximum: 5,
+        default: 3,
+      },
+    },
+  ],
+  additionalProperties: false,
+} satisfies ProtoSchemaObject;
