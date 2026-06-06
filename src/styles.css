@@ -22,7 +22,7 @@
   @apply relative;
 }
 
-.schematic-form__object-surface[data-invalid="true"] {
+.schematic-form__object-surface[data-sf-invalid="true"] {
   border-color: var(--color-danger);
 }
 

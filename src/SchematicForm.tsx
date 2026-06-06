@@ -721,7 +721,7 @@ function renderObject<TData>(
     return (
       <Surface
         className="schematic-form__surface schematic-form__object-surface"
-        data-invalid={nestedIssues.length > 0 ? "true" : undefined}
+        data-sf-invalid={nestedIssues.length > 0 ? "true" : undefined}
         data-sf-collapsed={expanded ? undefined : "true"}
         data-sf-path={pointer}
         key={pointer}

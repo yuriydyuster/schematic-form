@@ -1005,6 +1005,23 @@ describe("SchematicForm", () => {
     );
   });
 
+  test("marks invalid object surfaces with schematic-only invalid attribute", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
+
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const owner = getSurface(container, "/owner");
+    expect(owner).toHaveAttribute("data-sf-invalid", "true");
+    expect(owner).not.toHaveAttribute("data-invalid");
+
+    const websiteField = container.querySelector('[data-sf-path="/owner/website"]');
+    expect(websiteField).toBeInTheDocument();
+    expect(within(websiteField as HTMLElement).queryByText(/must /i)).not.toBeInTheDocument();
+    expect(within(websiteField as HTMLElement).getByText("Nested URI fields use the same formatted string layout.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Owner website")).not.toHaveAttribute("aria-invalid", "true");
+  });
+
   test("renders complex field descriptions below labels inside transparent surfaces", () => {
     const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
     const channels = container.querySelector('.schematic-form__field[data-sf-path="/channels"]');
