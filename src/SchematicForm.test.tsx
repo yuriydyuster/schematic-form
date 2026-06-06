@@ -1190,10 +1190,23 @@ describe("SchematicForm", () => {
 
   test("renders local $ref array items with sibling title and description", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
 
     expect(screen.getByRole("heading", {level: 2, name: "Form Meta Schema"})).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
+    expect(screen.queryByLabelText("JSON Schema Draft")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Type")).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name: /add property/i})).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toMatchObject({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+      });
+    });
 
     await user.click(screen.getByRole("button", {name: /add property/i}));
 
@@ -1275,6 +1288,27 @@ describe("SchematicForm", () => {
     expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
     expect(within(item).queryByText("Property name used as the object key.")).not.toBeInTheDocument();
     expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
+  });
+
+  test("renders nested object annotation properties with proto-schema row shape", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "Object"}));
+
+    const nestedProperties = getSurface(container, "/properties/0/propertyAnnotation/properties");
+    expect(within(nestedProperties).getByRole("button", {name: /add property/i})).toBeInTheDocument();
+
+    await user.click(within(nestedProperties).getByRole("button", {name: /add property/i}));
+
+    const nestedItem = getSurface(container, "/properties/0/propertyAnnotation/properties/0");
+    expect(within(nestedItem).getByLabelText("Key")).toBeInTheDocument();
+    expect(within(nestedItem).getByRole("switch", {name: "Required"})).toBeInTheDocument();
+    expect(within(nestedItem).getByRole("button", {name: /select an option property type/i})).toBeInTheDocument();
   });
 
   test("renders local $ref nodes with sibling title and description", async () => {

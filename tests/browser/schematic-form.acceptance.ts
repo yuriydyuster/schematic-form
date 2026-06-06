@@ -1,6 +1,6 @@
 import {expect, test, type Locator, type Page} from "@playwright/test";
 
-const draftKey = "schematic-form:kitchen-sink-demo";
+const draftKey = "schematic-form:proto-schema-demo";
 
 function collectRuntimeErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -45,6 +45,11 @@ test("loads the demo without browser runtime errors", async ({page}) => {
   await resetDemo(page);
 
   await expect(page.getByRole("heading", {level: 2, name: "Form Meta Schema"})).toBeVisible();
+  await expect(page.getByLabel("Name")).toBeVisible();
+  await expect(page.getByLabel("Title")).toBeVisible();
+  await expect(page.getByLabel("Description")).toBeVisible();
+  await expect(page.getByLabel("JSON Schema Draft")).toHaveCount(0);
+  await expect(page.getByLabel("Type")).toHaveCount(0);
   await expect(page.getByLabel("Current form state")).toBeVisible();
   await expect(page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
   await expect(page.getByText("A meta schema for describing a form as an array of recursive field definitions.")).toBeVisible();
@@ -98,6 +103,24 @@ test("branch selectors switch and validate only the active branch", async ({page
 
   await expect(page.getByText(/must have required property 'properties'/i)).toHaveCount(0);
   await expect(page.getByText(/must match exactly one schema/i)).toHaveCount(0);
+  await expectNoRuntimeErrors(errors);
+});
+
+test("valid proto-schema submit opens a generated form preview drawer", async ({page}) => {
+  const errors = collectRuntimeErrors(page);
+
+  await resetDemo(page);
+  await page.getByLabel("Title").fill("Generated Customer");
+  const row = await addField(page, 0);
+  await row.getByLabel("Key").fill("customerName");
+  await selectValidation(page, row, "String");
+  await row.getByLabel("Title").fill("Customer name");
+  await page.getByRole("button", {name: "Submit"}).click();
+
+  const drawer = page.getByRole("dialog", {name: "Generated Form Preview"});
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("heading", {level: 2, name: "Generated Customer"})).toBeVisible();
+  await expect(drawer.getByLabel("Customer name")).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });
 

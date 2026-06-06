@@ -673,9 +673,9 @@ const propertyAnnotationSchema: JsonSchema = {
           "enum": ["array"]
         },
         "items": {
-          "$ref": "#/$defs/property",
+          "$ref": "#/$defs/propertyAnnotation",
           "title": "Items",
-          "description": "Recursive property definition for array items."
+          "description": "Recursive property annotation for array items."
         },
         "minItems": {
           "type": ["integer"],
@@ -748,7 +748,7 @@ const propertyAnnotationSchema: JsonSchema = {
   "unevaluatedProperties": false
 };
 
-export const kitchenSinkSchema = {
+export const kitchenSinkSchemaMetaOld = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Form Meta Schema",
   "description": "A meta schema for describing a form as an array of recursive field definitions.",
@@ -786,5 +786,82 @@ export const kitchenSinkSchema = {
       },
       "required": ["propertyAnnotation"]
     }
+  }
+} satisfies JsonSchema;
+
+export const kitchenSinkSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Form Meta Schema",
+  "description": "A meta schema for describing a form as an array of recursive field definitions.",
+  "type": "object",
+  "propertyOrdering": ["$schema", "name", "title", "description", "type", "properties", "additionalProperties"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "title": "JSON Schema Draft",
+      "description": "JSON Schema draft URI for the generated schema.",
+      "enum": ["https://json-schema.org/draft/2020-12/schema"]
+    },
+    "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Machine-friendly schema name.",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "title": "Title",
+      "description": "Human-readable schema title.",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Human-readable schema description.",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "type": {
+      "type": "string",
+      "title": "Type",
+      "description": "Root schema value type.",
+      "enum": ["object"]
+    },
+    "properties": {
+      "type": "array",
+      "title": "Schema",
+      "description": "Array of property definitions used to build the form.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/property",
+        "title": "Property",
+        "description": "A single recursive property definition."
+      }
+    },
+    "additionalProperties": {
+      "type": "boolean",
+      "title": "Additional Properties",
+      "description": "Whether generated object schemas allow undeclared properties."
+    }
+  },
+  "required": ["$schema", "type", "properties"],
+  "additionalProperties": false,
+  "$defs": {
+    "property": {
+      "title": "Property",
+      "description": "A recursive property definition with its key, required flag, and nested schema annotation.",
+      "type": "object",
+      "propertyOrdering": ["key", "required", "propertyAnnotation"],
+      "properties": {
+        "key": propertyKeyAnnotationSchema,
+        "required": propertyRequiredAnnotationSchema,
+        "propertyAnnotation": {
+          "$ref": "#/$defs/propertyAnnotation"
+        }
+      },
+      "required": ["key", "required", "propertyAnnotation"],
+      "additionalProperties": false
+    },
+    "propertyAnnotation": propertyAnnotationSchema
   }
 } satisfies JsonSchema;
