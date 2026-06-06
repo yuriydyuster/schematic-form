@@ -34,9 +34,9 @@ async function addField(page: Page, index: number) {
 }
 
 async function selectValidation(page: Page, row: Locator, validationName: string) {
-  await row.getByRole("button", {name: /property annotation/i}).first().click();
+  await row.getByRole("button", {name: /property type/i}).first().click();
   await page.getByRole("option", {name: validationName}).click();
-  await expect(row.getByRole("button", {name: new RegExp(`${validationName} property annotation`, "i")})).toBeVisible();
+  await expect(row.getByRole("button", {name: new RegExp(`${validationName} property type`, "i")})).toBeVisible();
 }
 
 test("loads the demo without browser runtime errors", async ({page}) => {
@@ -89,7 +89,7 @@ test("branch selectors switch and validate only the active branch", async ({page
 
   await resetDemo(page);
   const row = await addField(page, 0);
-  await selectValidation(page, row, "Array Validation");
+  await selectValidation(page, row, "Array");
 
   await expect(row.getByText("Items", {exact: true})).toBeVisible();
   await expect(page.getByText("Properties", {exact: true})).toHaveCount(0);

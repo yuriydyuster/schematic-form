@@ -1127,7 +1127,7 @@ describe("SchematicForm", () => {
     await user.click(screen.getByRole("button", {name: /add property/i}));
 
     const item = getSurface(container, "/properties/0");
-    expect(within(item).getByRole("button", {name: /select an option property annotation/i})).toBeInTheDocument();
+    expect(within(item).getByRole("button", {name: /select an option property type/i})).toBeInTheDocument();
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
@@ -1156,7 +1156,7 @@ describe("SchematicForm", () => {
     );
   });
 
-  test("selecting a property annotation branch for an added local ref item does not toggle its required switch", async () => {
+  test("selecting a property type branch for an added local ref item does not toggle its required switch", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
@@ -1165,8 +1165,8 @@ describe("SchematicForm", () => {
     const item = getSurface(container, "/properties/0");
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
 
-    await user.click(within(item).getByRole("button", {name: /select an option property annotation/i}));
-    await user.click(await screen.findByRole("option", {name: "String Validation"}));
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
 
     expect(within(item).getByLabelText("Default")).toBeInTheDocument();
     await waitFor(() => {
