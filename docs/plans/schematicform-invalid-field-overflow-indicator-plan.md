@@ -2,226 +2,167 @@
 
 ## Objective
 
-Enhance the collapsed object summary UI to provide visual feedback when invalid form fields are hidden behind the overflow indicator (`...` chip).
+Improve collapsed object summaries so the overflow chip (`...`) signals hidden validation problems.
 
-Currently, when a collapsed object has more than 10 populated fields, only the first 10 are shown as chips and a `...` chip indicates there are more fields. This plan adds logic to turn the `...` chip red when **any of the hidden fields beyond the 10th are invalid**, alerting users that validation errors exist in the hidden portion.
+When a collapsed object summary overflows beyond the visible chip limit, the overflow chip should render in the invalid style only when at least one hidden summary item is invalid.
 
-## Current Behavior
+## Problem Statement
 
-- **Collapsed object summaries** show up to 10 field chips representing populated/invalid fields
-- **Overflow indicator**: When `items.length > 10`, a `...` chip is rendered in `primary` variant (default color)
-- **Invalid fields**: Rendered as `danger` soft chips (red color)
-- **Architecture**: Collection logic in `collectCollapsedObjectSummaryItems()` gathers all items but returns only the first 10 to render
+Current behavior renders:
+- Up to 10 summary chips.
+- A neutral `...` chip when more items exist.
+- Invalid visible items as danger soft chips.
 
-## Proposed Changes
+Gap: invalid fields that are hidden behind overflow are not indicated unless they happen to be among the first visible chips.
 
-### 1. Enhance `CollapsedObjectSummary` Type
+## Behavior Contract
 
-**File**: `src/types.ts`
+1. Visible summary chips keep current behavior.
+2. Overflow chip appears only when there are hidden items beyond the limit.
+3. Overflow chip uses danger soft styling when any hidden item is invalid.
+4. Overflow chip keeps neutral styling when hidden items are all valid.
+5. Summary traversal must terminate for recursive `$ref` schemas by using finite, bounded traversal rules.
+6. No changes to validation rules or error generation.
 
-Update the `CollapsedObjectSummary` type to track overflow validity:
+## Non-Goals
 
-```typescript
-export type CollapsedObjectSummary = {
-  items: Array<{
-    label: string;
-    value?: string;
-    invalid: boolean;
-  }>;
-  hasOverflow: boolean;
-  hasInvalidOverflow?: boolean; // NEW: true if any hidden invalid fields exist
-};
-```
+- No changes to Ajv schema sanitization or validation semantics.
+- No changes to public form state shape.
+- No changes to summary chip text format, truncation, or ordering.
+- No changes to collapse/expand interaction model.
 
-### 2. Update `getCollapsedObjectSummary()` Logic
+## Architecture Constraints
 
-**File**: `src/SchematicForm.tsx`
+- Keep implementation localized to collapsed summary logic in `src/SchematicForm.tsx`.
+- Keep `schematic-form__*` selectors stable.
+- Keep HeroUI chip usage and existing semantic class names.
+- Treat this as UI interpretation of existing `issueMap`; do not introduce new validation passes.
+- Respect existing recursive-ref handling (`refStack`) and keep traversal bounded by concrete form data, not schema shape alone.
 
-Modify `getCollapsedObjectSummary()` to detect invalid fields in the hidden overflow portion:
+## Implementation Strategy
 
-```typescript
-function getCollapsedObjectSummary<TData>(
-  schema: JsonSchema,
-  path: PathSegment[],
-  context: RendererContext<TData>,
-  refStack: string[] = [],
-): CollapsedObjectSummary {
-  const items: CollapsedObjectSummary["items"] = [];
-  collectCollapsedObjectSummaryItems(schema, path, getAtPath(context.data, path), false, context, refStack, items);
-  
-  const hasInvalidOverflow = items.length > collapsedObjectSummaryLimit
-    ? items.slice(collapsedObjectSummaryLimit).some(item => item.invalid)
-    : false;
-  
-  return {
-    items: items.slice(0, collapsedObjectSummaryLimit),
-    hasOverflow: items.length > collapsedObjectSummaryLimit,
-    hasInvalidOverflow,
-  };
-}
-```
+### 1. Summary Output Shape
 
-### 3. Update `CollapsedObjectSummary` Component
+Track overflow invalidity in the local collapsed summary model (internal to `SchematicForm.tsx`).
 
-**File**: `src/SchematicForm.tsx`
+Required data:
+- `items`: visible chips (max 10).
+- `hasOverflow`: whether hidden items exist.
+- `hasInvalidOverflow`: whether any hidden item is invalid.
 
-Modify the component to render the `...` chip with `danger` color when `hasInvalidOverflow` is true:
+### 2. Collection Logic
 
-```typescript
-function CollapsedObjectSummary({summary}: {summary: CollapsedObjectSummary}) {
-  if (summary.items.length === 0 && !summary.hasOverflow) return null;
-  return (
-    <div className="schematic-form__object-summary" aria-label="Collapsed object values">
-      {summary.items.map((item, index) => (
-        <Chip
-          className="schematic-form__object-summary-chip"
-          color={item.invalid ? "danger" : "default"}
-          key={`${item.label}-${item.value ?? ""}-${index}`}
-          size="sm"
-          title={item.value == null ? item.label : `${item.label}: ${item.value}`}
-          variant={item.invalid ? "soft" : "primary"}
-        >
-          <ChipLabel>
-            {trimSummaryText(item.label)}
-            {item.value == null ? null : (
-              <>
-                {": "}
-                <strong>{trimSummaryText(item.value)}</strong>
-              </>
-            )}
-          </ChipLabel>
-        </Chip>
-      ))}
-      {summary.hasOverflow ? (
-        <Chip
-          className="schematic-form__object-summary-chip"
-          color={summary.hasInvalidOverflow ? "danger" : "default"}  // CHANGED
-          size="sm"
-          variant={summary.hasInvalidOverflow ? "soft" : "primary"}  // CHANGED
-        >
-          ...
-        </Chip>
-      ) : null}
-    </div>
-  );
-}
-```
+Refactor summary collection so hidden invalidity is computed correctly.
 
-## Styling Validation
+Key requirement:
+- Do not stop traversal immediately after collecting visible chips.
+- Continue enough traversal to determine whether any hidden item is invalid.
+- Keep traversal finite for recursive schemas and pathological nested values.
 
-The `...` chip styling will **exactly match** visible invalid field chips when `hasInvalidOverflow` is true.
+Acceptable implementations:
+1. Single traversal with dual bookkeeping:
+   - Collect visible chips until limit.
+   - Continue scanning hidden candidates for invalidity only.
+2. Two-phase approach:
+   - First pass for visible chips and overflow detection.
+   - Second pass (or targeted continuation) to compute hidden invalid flag.
 
-### Current Invalid Field Chip Styling
-Visible invalid fields render with:
-- `color="danger"` – red/danger color from HeroUI theme
-- `variant="soft"` – soft variant (muted background)
-- `size="sm"` – small size (matches all summary chips)
-- `className="schematic-form__object-summary-chip"` – semantic class
+Selection criteria:
+- Correctness for deeply nested objects/arrays/branches.
+- No behavioral regressions in existing summary chip ordering.
+- Simple enough to maintain in current module.
 
-### Proposed Overflow Chip Styling (When Invalid)
-When `hasInvalidOverflow` is true:
-- `color="danger"` – **same**
-- `variant="soft"` – **same**
-- `size="sm"` – **same** (already set)
-- `className="schematic-form__object-summary-chip"` – **same**
+### 2a. Recursive Reference Safety
 
-### Result
-The red `...` chip will be **visually indistinguishable** from a regular invalid field chip. Users will perceive it as "this overflow contains an invalid field" through the color change alone, consistent with how visible invalid fields are shown.
+Traversal rules must explicitly prevent unbounded recursion:
+- Continue to rely on schema reference-cycle handling from `refStack`/resolver behavior.
+- Descend only through concrete runtime values (object keys/array items), never by expanding schema-only recursive definitions.
+- Introduce a reasonable traversal budget (for example depth and/or visited-node cap) so extremely deep nested data cannot recurse indefinitely.
+- On budget exhaustion, fail safe by stopping deeper summary traversal without throwing or blocking form rendering.
 
-### Default (Valid) Overflow Chip Styling
-When `hasInvalidOverflow` is false:
-- `color="default"` – default/neutral color
-- `variant="primary"` – primary variant (bold)
-- `size="sm"` – small size
-- `className="schematic-form__object-summary-chip"` – semantic class
+### 3. Rendering Logic
 
-This preserves the current behavior: neutral `...` chip when hidden fields are valid or empty.
+Update overflow chip rendering to map state to style:
+- `hasInvalidOverflow = true` -> danger soft chip.
+- `hasInvalidOverflow = false` -> current neutral style.
 
-## Testing Strategy
+Visible item chip styling remains unchanged.
 
-### Unit Tests
+## Testing Plan
 
-**File**: `src/SchematicForm.collapse.test.tsx`
+Primary coverage belongs in `src/SchematicForm.collapse.test.tsx`.
 
-Add new test cases:
+Add/adjust tests for:
+1. Hidden invalid only:
+   - First 10 visible chips are valid.
+   - At least one hidden chip is invalid.
+   - Overflow chip renders as danger soft.
+2. Hidden all valid:
+   - Overflow exists.
+   - No hidden invalid items.
+   - Overflow chip remains neutral.
+3. Visible invalid only:
+   - Visible invalid chips render as danger soft.
+   - Hidden items valid.
+   - Overflow chip remains neutral.
+4. Visible and hidden invalid:
+   - Visible invalid chips remain danger soft.
+   - Overflow chip also danger soft.
+5. No overflow:
+   - Fewer than or equal to 10 chips.
+   - No `...` chip rendered.
+6. Recursive `$ref` bounded traversal:
+   - Use a recursive local-ref schema with nested data.
+   - Verify summary generation completes and preserves current visible-chip behavior.
+7. Pathological deep nesting guard:
+   - Use very deep nested value input.
+   - Verify traversal stops safely (no hang/stack overflow) and UI still renders.
 
-1. **Test: "shows red overflow indicator when hidden fields are invalid"**
-   - Create schema with 15 fields
-   - Set default value for 12 fields (fields 1-12 populated)
-   - Mark field 11 or 12 as invalid via validation
-   - Collapse the object
-   - Assert: First 10 chips render, field 11 or 12 is one of them
-   - Assert: `...` chip has `chip--danger` and `chip--soft` classes
+Test notes:
+- Keep assertions on stable classes (`chip--danger`, `chip--soft`, etc.).
+- Avoid contradictory setups where the "hidden invalid" field is actually visible.
 
-2. **Test: "shows default overflow indicator when hidden fields are valid"**
-   - Create schema with 15 fields
-   - Set default value for all 15 fields (all populated, all valid)
-   - Collapse the object
-   - Assert: First 10 chips render (all valid, default color)
-   - Assert: `...` chip has `chip--default` and `chip--primary` classes
+## Browser Acceptance Scope
 
-3. **Test: "shows red overflow indicator when both visible and hidden fields are invalid"**
-   - Schema with 12 fields
-   - Set invalid values in fields 2, 3, and 11
-   - Collapse and assert both visible invalid chips (fields 2, 3) and red `...` render
+Optional for this change.
 
-4. **Test: "shows default overflow when all hidden fields are empty (no overflow display)"**
-   - Schema with 15 fields
-   - Only populate fields 1-5
-   - Collapse and assert no `...` chip (less than 10 items total)
+Rationale:
+- Behavior is deterministic UI state in a unit-tested summary component path.
+- Existing Playwright suite does not currently target this specific collapsed-summary overflow case.
 
-### Browser Acceptance Tests
+If acceptance coverage is added, include one scenario that verifies:
+- Collapsed overflow chip style changes when hidden invalid fields exist.
 
-Add scenarios to `tests/browser/schematic-form.acceptance.ts`:
+## Documentation Updates
 
-- Verify red `...` indicator is visually distinct (color change is observable in screenshot)
-- Verify expanding a collapsed object with red `...` shows the hidden invalid fields
-- Verify expanding after invalid submit shows all errors including those in overflow
+After implementation, update `docs/ARCHITECTURE.md` collapsed-summary behavior section to note:
+- Overflow chip signals hidden invalid fields via danger styling.
 
-## Implementation Notes
+## Risks And Mitigations
 
-### No Validation Logic Changes
-
-- Validation remains unchanged; this is purely UI interpretation
-- Validation errors already computed via Ajv in `context.issueMap`
-- No changes to validation.ts or validation.test.ts needed
-
-### Backwards Compatibility
-
-- Type addition is non-breaking (`hasInvalidOverflow` is optional)
-- Existing consumer code rendering summaries requires no changes
-- If `hasInvalidOverflow` is undefined, `...` chip renders with default styling (safe fallback)
-
-### Performance
-
-- Single pass through items array: `items.slice(collapsedObjectSummaryLimit).some(item => item.invalid)`
-- O(n) where n = items beyond limit (typically small number, max array size)
-- No additional schema traversals or validation runs
-
-## Files Modified
-
-1. `src/types.ts` – Add `hasInvalidOverflow` to `CollapsedObjectSummary` type
-2. `src/SchematicForm.tsx` – Update three functions:
-   - `getCollapsedObjectSummary()` – Compute `hasInvalidOverflow`
-   - `CollapsedObjectSummary()` – Render red `...` chip when true
-3. `src/SchematicForm.collapse.test.tsx` – Add four new test cases
-4. `tests/browser/schematic-form.acceptance.ts` – Add acceptance scenarios (optional)
+- Risk: hidden invalid detection misses deep nested invalids.
+  - Mitigation: include nested object/array case in unit tests.
+- Risk: regression in summary ordering/limit behavior.
+  - Mitigation: keep and extend current limit/ordering tests.
+- Risk: style regressions from class/variant changes.
+  - Mitigation: assert chip classes in tests.
 
 ## Deliverables
 
-- [ ] Plan review with user
-- [ ] Implementation of type and logic changes
-- [ ] Unit test coverage
-- [ ] Browser acceptance test coverage (if applicable)
-- [ ] Manual verification in demo app
-- [ ] `npm run lint` passes
-- [ ] `npm test` passes
-- [ ] `npm run test:acceptance` passes (if acceptance tests added)
+- [ ] Implement internal summary model update.
+- [ ] Implement collector logic that correctly computes hidden invalid overflow.
+- [ ] Add explicit bounded-traversal safeguards for recursive/deep data cases.
+- [ ] Implement overflow chip style mapping.
+- [ ] Add/adjust unit tests in `src/SchematicForm.collapse.test.tsx`.
+- [ ] Update `docs/ARCHITECTURE.md` summary behavior note.
+- [ ] Run `npm test`.
+- [ ] Run `npm run lint`.
 
 ## Success Criteria
 
-1. Red `...` chip appears only when hidden fields contain invalid data
-2. Default `...` chip appears when hidden fields are all valid or empty
-3. All existing tests pass
-4. New unit tests cover both red and default overflow states
-5. Demo app visually confirms red indicator on complex schemas with 10+ fields
+1. Overflow chip turns danger soft only when hidden items include invalid state.
+2. Overflow chip remains neutral when hidden items are valid.
+3. Existing collapsed summary behavior (limit/order/content) remains unchanged.
+4. New and existing unit tests pass.
+5. Recursive `$ref` schemas are handled with finite traversal and no hangs.
+6. Architecture docs reflect the updated overflow behavior and recursion-bounding rule.
