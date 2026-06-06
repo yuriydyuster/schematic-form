@@ -145,7 +145,7 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 
 | Schema feature | Rendered behavior |
 | --- | --- |
-| `type: "object"` | Nested field group inside a transparent HeroUI surface. Nested object surfaces are collapsible, expanded by default, and remember expansion state across refreshes. |
+| `type: "object"` | Nested field group inside a transparent HeroUI surface. Nested object surfaces are collapsible, expanded by default, and remember expansion state across refreshes. Collapsed objects show up to 10 small summary chips for populated nested fields, including hidden required single-value enum fields; chip labels mirror the expanded field labels, so array item indexes such as `#1` and `#2` appear only when that field label is indexed in the expanded form. Labels and values are trimmed after 20 symbols, booleans show as `On`/`Off`, and overflow is shown with a final `...` chip. Visible invalid fields appear as danger soft chips; empty required invalid fields show a label-only chip, while optional invalid fields show only when they have a value. |
 | `type: "array"` | Repeatable rows with add, move, and remove buttons. |
 | `type: "string"` | Single-line input by default. |
 | Long unformatted string | Text area when `minLength` or `maxLength` is greater than `255`. |

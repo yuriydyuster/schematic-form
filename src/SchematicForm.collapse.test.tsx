@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import {beforeEach, describe, expect, test, vi} from "vitest";
 
 import {SchematicForm} from "./SchematicForm";
+import {kitchenSinkSchema} from "./sampleSchemas";
 import type {JsonSchema, SchematicFormState} from "./types";
 
 function getSurface(container: HTMLElement, pointer: string) {
@@ -98,6 +99,24 @@ const summarySchema = {
   },
 } satisfies JsonSchema;
 
+const scalarArraySummarySchema = {
+  type: "object",
+  title: "Scalar array summary form",
+  properties: {
+    section: {
+      type: "object",
+      title: "Section",
+      properties: {
+        aliases: {
+          type: "array",
+          title: "Aliases",
+          items: {type: "string", title: "Alias"},
+        },
+      },
+    },
+  },
+} satisfies JsonSchema;
+
 const overflowSummarySchema = {
   type: "object",
   title: "Overflow summary form",
@@ -180,18 +199,27 @@ describe("SchematicForm collapsible object surfaces", () => {
 
   test("renders collapsible toggles for object rows inside arrays", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={rowsSchema} defaultValue={{milestones: [{name: "Kickoff"}]}} />);
+    const {container} = render(
+      <SchematicForm schema={rowsSchema} defaultValue={{milestones: [{name: "Kickoff"}, {name: "Launch"}]}} />,
+    );
 
-    const row = getSurface(container, "/milestones/0");
-    const toggle = within(row).getByRole("button", {name: "Collapse Milestone #1"});
+    const firstRow = getSurface(container, "/milestones/0");
+    const secondRow = getSurface(container, "/milestones/1");
+    const toggle = within(firstRow).getByRole("button", {name: "Collapse Milestone #1"});
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(within(row).getByLabelText("Name")).toBeInTheDocument();
+    expect(within(firstRow).getByLabelText("Name")).toBeInTheDocument();
 
     await user.click(toggle);
+    await user.click(within(secondRow).getByRole("button", {name: "Collapse Milestone #2"}));
 
-    expect(within(row).getByRole("button", {name: "Expand Milestone #1"})).toHaveAttribute("aria-expanded", "false");
-    expect(within(row).getByLabelText("Name")).not.toBeVisible();
+    expect(within(firstRow).getByRole("button", {name: "Expand Milestone #1"})).toHaveAttribute("aria-expanded", "false");
+    expect(within(secondRow).getByRole("button", {name: "Expand Milestone #2"})).toHaveAttribute("aria-expanded", "false");
+    expect(firstRow.querySelector(".schematic-form__object-summary")).toHaveTextContent("Name: Kickoff");
+    expect(secondRow.querySelector(".schematic-form__object-summary")).toHaveTextContent("Name: Launch");
+    expect(firstRow.querySelector(".schematic-form__object-summary")).not.toHaveTextContent("Name #1");
+    expect(secondRow.querySelector(".schematic-form__object-summary")).not.toHaveTextContent("Name #2");
+    expect(within(firstRow).getByLabelText("Name")).not.toBeVisible();
   });
 
   test("renders collapsible toggles for selected object branch variants", async () => {
@@ -246,6 +274,62 @@ describe("SchematicForm collapsible object surfaces", () => {
     expect(summary).toHaveTextContent("Extremely long label...: abcdefghijklmnopqrst...");
     expect(summary).toHaveTextContent("Deepest label: Nested value");
     expect(summary).toHaveTextContent("Enabled: Off");
+  });
+
+  test("uses array item indexes in chips only when the expanded field label is indexed", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm schema={scalarArraySummarySchema} defaultValue={{section: {aliases: ["Alpha", "Beta"]}}} />,
+    );
+
+    const section = getSurface(container, "/section");
+    expect(within(section).getByLabelText("Alias #1")).toBeInTheDocument();
+    expect(within(section).getByLabelText("Alias #2")).toBeInTheDocument();
+
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    expect(summary).toHaveTextContent("Alias #1: Alpha");
+    expect(summary).toHaveTextContent("Alias #2: Beta");
+  });
+
+  test("shows invalid collapsed fields as danger soft chips", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={profileSchema}
+        defaultValue={{owner: {email: "not an email"}}}
+        validationMode="change"
+      />,
+    );
+
+    const owner = getSurface(container, "/owner");
+    await user.click(within(owner).getByRole("button", {name: "Collapse Owner"}));
+
+    const chips = Array.from(owner.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(2);
+    for (const chip of chips) {
+      expect(chip).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+    }
+    expect(chips[0]).toHaveTextContent("Owner name");
+    expect(chips[0]).not.toHaveTextContent(":");
+    expect(chips[1]).toHaveTextContent("Owner email: not an email");
+  });
+
+  test("shows required empty key field in collapsed demo property summary", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} defaultValue={{properties: [{}]}} />);
+
+    const property = getSurface(container, "/properties/0");
+    await user.click(within(property).getByRole("button", {name: "Collapse Property #1"}));
+
+    const summary = property.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    const keyChip = within(summary as HTMLElement).getByText("Key").closest(".schematic-form__object-summary-chip");
+    expect(keyChip).toBeInTheDocument();
+    expect(keyChip).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+    expect(keyChip).not.toHaveTextContent(":");
+    expect(summary).not.toHaveTextContent("Key #1");
   });
 
   test("limits collapsed object value chips to ten plus overflow marker", async () => {

@@ -823,7 +823,7 @@ const collapsedObjectSummaryLimit = 10;
 const collapsedObjectSummaryTextLimit = 20;
 
 type CollapsedObjectSummary = {
-  items: Array<{label: string; value: string}>;
+  items: Array<{label: string; value?: string; invalid?: boolean}>;
   hasOverflow: boolean;
 };
 
@@ -834,14 +834,20 @@ function CollapsedObjectSummary({summary}: {summary: CollapsedObjectSummary}) {
       {summary.items.map((item, index) => (
         <Chip
           className="schematic-form__object-summary-chip"
-          color="default"
-          key={`${item.label}-${item.value}-${index}`}
+          color={item.invalid ? "danger" : "default"}
+          key={`${item.label}-${item.value ?? ""}-${index}`}
           size="sm"
-          title={`${item.label}: ${item.value}`}
-          variant="primary"
+          title={item.value == null ? item.label : `${item.label}: ${item.value}`}
+          variant={item.invalid ? "soft" : "primary"}
         >
           <ChipLabel>
-            {trimSummaryText(item.label)}: <strong>{trimSummaryText(item.value)}</strong>
+            {trimSummaryText(item.label)}
+            {item.value == null ? null : (
+              <>
+                {": "}
+                <strong>{trimSummaryText(item.value)}</strong>
+              </>
+            )}
           </ChipLabel>
         </Chip>
       ))}
@@ -861,7 +867,7 @@ function getCollapsedObjectSummary<TData>(
   refStack: string[] = [],
 ): CollapsedObjectSummary {
   const items: CollapsedObjectSummary["items"] = [];
-  collectCollapsedObjectSummaryItems(schema, path, getAtPath(context.data, path), context, refStack, items);
+  collectCollapsedObjectSummaryItems(schema, path, getAtPath(context.data, path), false, context, refStack, items);
   return {
     items: items.slice(0, collapsedObjectSummaryLimit),
     hasOverflow: items.length > collapsedObjectSummaryLimit,
@@ -872,6 +878,7 @@ function collectCollapsedObjectSummaryItems<TData>(
   schema: JsonSchema,
   path: PathSegment[],
   value: unknown,
+  required: boolean,
   context: RendererContext<TData>,
   refStack: string[],
   items: CollapsedObjectSummary["items"],
@@ -886,35 +893,57 @@ function collectCollapsedObjectSummaryItems<TData>(
   const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   if (branch) {
     const selected = getSelectedSummaryBranch(schema, path, branch.branches, context, resolved.refStack);
-    if (selected) collectCollapsedObjectSummaryItems(selected, path, value, context, resolved.refStack, items);
+    if (selected) collectCollapsedObjectSummaryItems(selected, path, value, required, context, resolved.refStack, items);
+    else if (required) {
+      items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+    }
     return;
   }
 
   const type = getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
 
   if (type === "object") {
-    if (!isRecord(value)) return;
+    if (!isRecord(value)) {
+      if (required) items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+      return;
+    }
+    const requiredKeys = new Set(schema.required ?? []);
     for (const key of getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
       if (items.length > collapsedObjectSummaryLimit) return;
       const child = schema.properties?.[key];
       if (!child) continue;
-      collectCollapsedObjectSummaryItems(child, [...path, key], value[key], context, resolved.refStack, items);
+      collectCollapsedObjectSummaryItems(child, [...path, key], value[key], requiredKeys.has(key), context, resolved.refStack, items);
     }
     return;
   }
 
   if (type === "array") {
-    if (!Array.isArray(value) || value.length === 0) return;
+    if (!Array.isArray(value) || value.length === 0) {
+      if (required) items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+      return;
+    }
     const itemSchema = getSingleArrayItemSchema(schema, context.rootSchema, resolved.refStack);
     if (!itemSchema) return;
     value.forEach((item, index) => {
       if (items.length > collapsedObjectSummaryLimit) return;
-      collectCollapsedObjectSummaryItems(itemSchema, [...path, index], item, context, resolved.refStack, items);
+      collectCollapsedObjectSummaryItems(withIndexedArrayItemTitle(itemSchema, index), [...path, index], item, true, context, resolved.refStack, items);
     });
     return;
   }
 
-  if (!hasCollapsedSummaryValue(value)) return;
+  const issues = context.issueMap.get(toPointer(path)) ?? [];
+  const hasValue = hasCollapsedSummaryValue(value);
+  const invalid = issues.length > 0 || (required && !hasValue);
+  if (invalid && (required || hasValue)) {
+    items.push({
+      label: getCollapsedSummaryLabel(schema, path),
+      value: hasValue ? formatCollapsedSummaryValue(value) : undefined,
+      invalid: true,
+    });
+    return;
+  }
+
+  if (!hasValue) return;
 
   items.push({
     label: getCollapsedSummaryLabel(schema, path),
