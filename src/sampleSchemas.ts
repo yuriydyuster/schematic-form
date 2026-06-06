@@ -494,7 +494,8 @@ const propertyAnnotationSchema: JsonSchema = {
         "format": {
           "type": ["string"],
           "title": "Format",
-          "description": "String format hint, such as email, uri, date, or date-time."
+          "description": "String format hint, such as email, uri, date, or date-time.",
+          "enum": ["", "email", "uri", "date", "date-time", "time", "hostname", "ipv4", "ipv6", "uuid"] 
         },
         "pattern": {
           "type": ["string"],
@@ -789,19 +790,13 @@ export const kitchenSinkSchema = {
   "title": "SchematicForm Builder",
   "description": "Create your own form using this JSON schema editor.",
   "type": "object",
-  "propertyOrdering": ["$schema", "name", "title", "description", "type", "properties", "additionalProperties"],
+  "propertyOrdering": ["$schema", "title", "description", "type", "properties", "additionalProperties"],
   "properties": {
     "$schema": {
       "type": "string",
       "title": "JSON Schema Draft",
       "description": "JSON Schema draft URI for the generated schema.",
       "enum": ["https://json-schema.org/draft/2020-12/schema"]
-    },
-    "name": {
-      "type": "string",
-      "title": "Name",
-      "description": "Machine-friendly schema name.",
-      "minLength": 1
     },
     "title": {
       "type": "string",
@@ -839,7 +834,7 @@ export const kitchenSinkSchema = {
       "description": "Whether generated object schemas allow undeclared properties."
     }
   },
-  "required": ["$schema", "name", "type", "properties"],
+  "required": ["$schema", "type", "properties"],
   "additionalProperties": false,
   "$defs": {
     "property": {
@@ -863,7 +858,6 @@ export const kitchenSinkSchema = {
 
 export const kitchenSinkSchemaInitialValue = {
   $schema: JSON_SCHEMA_2020_12,
-  name: "contactRequest",
   title: "Contact Request",
   description: "Collect contact details and communication preferences.",
   type: "object",

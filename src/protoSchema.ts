@@ -4,7 +4,6 @@ export const JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema
 
 export type ProtoSchemaObject = {
   $schema: typeof JSON_SCHEMA_2020_12;
-  name: string;
   title?: string;
   description?: string;
   type: "object";
@@ -121,7 +120,7 @@ export function protoSchemaToJsonSchema(protoSchema: ProtoSchemaObject): JsonSch
     type: "object",
   };
 
-  copyDefined(schema, protoSchema, ["name", "title", "description", "additionalProperties"]);
+  copyDefined(schema, protoSchema, ["title", "description", "additionalProperties"]);
   applyClassicProperties(schema, protoSchema.properties, "root");
 
   return schema;
