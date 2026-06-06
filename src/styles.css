@@ -17,6 +17,64 @@
   @apply flex w-full flex-col rounded-xl border p-3 pb-4;
 }
 
+.schematic-form__object-surface {
+  @apply relative;
+}
+
+.schematic-form__object-surface[data-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.schematic-form__object-header {
+  @apply m-0 flex w-full min-w-0 max-w-full items-start justify-between gap-2;
+  box-sizing: border-box;
+}
+
+.schematic-form__object-header-label {
+  @apply min-w-0 flex-1 pr-2;
+}
+
+.schematic-form__object-toggle {
+  @apply inline-flex size-6 shrink-0 items-center justify-center rounded-full outline-none;
+  cursor: var(--cursor-interactive);
+}
+
+.schematic-form__object-toggle:hover,
+.schematic-form__object-toggle[data-hovered="true"] {
+  background-color: var(--default);
+}
+
+.schematic-form__object-toggle:focus-visible,
+.schematic-form__object-toggle[data-focus-visible="true"] {
+  @apply status-focused;
+}
+
+.schematic-form__object-toggle-icon {
+  @apply block size-2 shrink-0 border-b border-r transition duration-250 motion-reduce:transition-none;
+  border-color: currentColor;
+  transform: rotate(45deg);
+}
+
+.schematic-form__object-toggle-icon[data-expanded="true"] {
+  transform: rotate(225deg);
+}
+
+.schematic-form__object-description {
+  @apply mb-3 mt-0 flex w-full flex-col;
+}
+
+.schematic-form__object-description > .schematic-form__description {
+  @apply mt-0;
+}
+
+.schematic-form__object-content {
+  @apply block;
+}
+
+.schematic-form__object-content[hidden] {
+  @apply hidden;
+}
+
 .schematic-form__fieldset {
   @apply flex w-full flex-col gap-0;
 }

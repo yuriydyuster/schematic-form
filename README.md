@@ -145,7 +145,7 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 
 | Schema feature | Rendered behavior |
 | --- | --- |
-| `type: "object"` | Nested field group inside a transparent HeroUI surface. |
+| `type: "object"` | Nested field group inside a transparent HeroUI surface. Nested object surfaces are collapsible and expanded by default. |
 | `type: "array"` | Repeatable rows with add, move, and remove buttons. |
 | `type: "string"` | Single-line input by default. |
 | Long unformatted string | Text area when `minLength` or `maxLength` is greater than `255`. |

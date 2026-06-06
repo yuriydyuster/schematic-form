@@ -136,10 +136,13 @@ describe("SchematicForm", () => {
 
     const owner = getSurface(container, "/owner");
     const ownerLegend = owner.querySelector(".fieldset__legend");
+    const ownerHeader = owner.querySelector(".schematic-form__object-header");
     const ownerDescription = within(owner).getByText("Nested objects render inside their own transparent surface.");
     expect(ownerLegend).not.toBeNull();
-    expect(ownerLegend?.parentElement).toHaveClass("schematic-form__fieldset");
-    expect(ownerDescription.closest(".schematic-form__field-group")).toBeInTheDocument();
+    expect(ownerLegend).toHaveClass("schematic-form__object-header");
+    expect(ownerHeader).toBe(ownerLegend);
+    expect(ownerHeader).toContainElement(within(owner).getByRole("button", {name: "Collapse Owner"}));
+    expect(ownerDescription.closest(".schematic-form__object-description")).toBeInTheDocument();
 
     const milestones = getSurface(container, "/milestones");
     const milestonesLegend = milestones.querySelector(".fieldset__legend");
@@ -1548,7 +1551,7 @@ describe("SchematicForm", () => {
 
     render(<SchematicForm schema={schema} />);
 
-    expect(screen.getByText("contactDetails")).toHaveClass("fieldset__legend");
+    expect(screen.getByText("contactDetails").closest(".fieldset__legend")).toBeInTheDocument();
     expect(screen.getByText("deliveryChoice")).toHaveClass("fieldset__legend");
     expect(screen.getByText("reviewTags")).toHaveClass("fieldset__legend");
     expect(screen.getByLabelText("name")).toBeInTheDocument();

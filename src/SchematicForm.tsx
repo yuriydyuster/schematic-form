@@ -203,6 +203,7 @@ export function SchematicForm<TData = unknown>({
   const [branchSelection, setBranchSelection] = useState<BranchSelectionState>({});
   const [branchValueCache, setBranchValueCache] = useState<BranchValueCache>({});
   const [rowIdsByPointer, setRowIdsByPointer] = useState<Record<string, string[]>>({});
+  const [objectExpandedByPointer, setObjectExpandedByPointer] = useState<Record<string, boolean>>({});
   const rowIdCounter = useRef(0);
   const formRef = useRef<HTMLFormElement | null>(null);
   const draftSaveTimeoutRef = useRef<number | null>(null);
@@ -369,6 +370,32 @@ export function SchematicForm<TData = unknown>({
     [issueMap, shouldShowIssues],
   );
 
+  const getVisibleIssuesUnderPointer = useCallback(
+    (pointer: string) => {
+      const prefix = pointer === "/" ? "/" : `${pointer}/`;
+      return validation.issues.filter((issue) => {
+        if (issue.path !== pointer && !issue.path.startsWith(prefix)) return false;
+        return shouldShowIssues(issue.path);
+      });
+    },
+    [shouldShowIssues, validation.issues],
+  );
+
+  const setObjectExpanded = useCallback((pointer: string, expanded: boolean) => {
+    setObjectExpandedByPointer((current) => ({...current, [pointer]: expanded}));
+  }, []);
+
+  const expandObjectAncestorsForIssue = useCallback((issue: ValidationIssue | undefined) => {
+    if (!issue) return;
+    const ancestors = getPointerAncestors(issue.path);
+    if (ancestors.length === 0) return;
+    setObjectExpandedByPointer((current) => {
+      const next = {...current};
+      for (const pointer of ancestors) next[pointer] = true;
+      return next;
+    });
+  }, []);
+
   const handleSubmit = useCallback(
     (event: React.FormEvent) => {
       event.preventDefault();
@@ -382,6 +409,7 @@ export function SchematicForm<TData = unknown>({
       };
 
       if (!validation.isValid) {
+        expandObjectAncestorsForIssue(validation.issues[0]);
         window.setTimeout(() => focusFirstIssue(formRef.current, validation.issues), 0);
       }
 
@@ -403,6 +431,7 @@ export function SchematicForm<TData = unknown>({
       data,
       draftKey,
       draftStorage,
+      expandObjectAncestorsForIssue,
       isSubmitting,
       onSubmit,
       validation.errors,
@@ -435,6 +464,7 @@ export function SchematicForm<TData = unknown>({
     fieldRenderer,
     formRef,
     getVisibleIssues,
+    getVisibleIssuesUnderPointer,
     issueMap,
     markTouched,
     messages: mergedMessages,
@@ -454,7 +484,9 @@ export function SchematicForm<TData = unknown>({
       rowIdCounter.current += 1;
       return `sf-row-${rowIdCounter.current}`;
     },
+    objectExpandedByPointer,
     rootSchema: jsonSchema,
+    setObjectExpanded,
   };
 
   return (
@@ -496,6 +528,7 @@ type RendererContext<TData> = {
   fieldRenderer?: SchematicFormProps<TData>["fieldRenderer"];
   formRef: React.RefObject<HTMLFormElement | null>;
   getVisibleIssues(pointer: string): ValidationIssue[];
+  getVisibleIssuesUnderPointer(pointer: string): ValidationIssue[];
   issueMap: Map<string, ValidationIssue[]>;
   markTouched(pointer: string): void;
   messages: typeof defaultMessages;
@@ -509,7 +542,9 @@ type RendererContext<TData> = {
   rebaseBranchMetadata(arrayPointer: string, operation: ArrayPointerRebaseOperation): void;
   commitData(data: unknown): void;
   makeRowId(): string;
+  objectExpandedByPointer: Record<string, boolean>;
   rootSchema: JsonSchema;
+  setObjectExpanded(pointer: string, expanded: boolean): void;
 };
 
 function renderSchema<TData>(
@@ -570,10 +605,30 @@ function renderObject<TData>(
   refStack: string[] = [],
 ) {
   const pointer = toPointer(path);
+  const isRoot = path.length === 0;
+
+  if (!isRoot) {
+    const label = getObjectFieldsetLabel(schema, path, {});
+    const expanded = context.objectExpandedByPointer[pointer] ?? true;
+    const nestedIssues = context.getVisibleIssuesUnderPointer(pointer);
+
+    return (
+      <Surface
+        className="schematic-form__surface schematic-form__object-surface"
+        data-invalid={nestedIssues.length > 0 ? "true" : undefined}
+        data-sf-collapsed={expanded ? undefined : "true"}
+        data-sf-path={pointer}
+        key={pointer}
+        variant="transparent"
+      >
+        {renderObjectFieldset(schema, path, context, {collapsed: !expanded}, refStack)}
+      </Surface>
+    );
+  }
 
   return (
     <Surface className="schematic-form__surface" data-sf-path={pointer} key={pointer} variant="transparent">
-      {renderObjectFieldset(schema, path, context, {root: path.length === 0}, refStack)}
+      {renderObjectFieldset(schema, path, context, {root: isRoot}, refStack)}
     </Surface>
   );
 }
@@ -582,42 +637,65 @@ function renderObjectFieldset<TData>(
   schema: JsonSchema,
   path: PathSegment[],
   context: RendererContext<TData>,
-  options: {root?: boolean; forceTitle?: boolean; omitUntitledLegend?: boolean} = {},
+  options: {root?: boolean; forceTitle?: boolean; omitUntitledLegend?: boolean; collapsed?: boolean; collapsible?: boolean} = {},
   refStack: string[] = [],
 ) {
   const resolved = resolveRenderSchema(schema, context, refStack);
   schema = resolved.schema;
+  const pointer = toPointer(path);
   const label = getObjectFieldsetLabel(schema, path, options);
+  const expanded = context.objectExpandedByPointer[pointer] ?? true;
+  const collapsed = options.collapsed ?? (options.collapsible ? !expanded : undefined);
   const keys = getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   const required = new Set(schema.required ?? []);
+  const description = options.root ? (
+    schema.description ? (
+      <TypographyParagraph color="muted" size="base" slot={null}>
+        {schema.description}
+      </TypographyParagraph>
+    ) : null
+  ) : (
+    schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null
+  );
+  const fieldGroup = (
+    <FieldsetGroup className="schematic-form__field-group">
+      {collapsed == null ? description : null}
+      {keys.map((key) => {
+        const child = schema.properties?.[key];
+        if (!child) return null;
+        const childIsRequired = required.has(key);
+        if (childIsRequired && isSingleEnumSchema(child, context.rootSchema, resolved.refStack)) return null;
+        return renderSchema(child, [...path, key], childIsRequired, context, resolved.refStack);
+      })}
+    </FieldsetGroup>
+  );
 
   return (
-    <Fieldset className="schematic-form__fieldset">
-      {options.root ? (
+    <Fieldset className={cx("schematic-form__fieldset", options.collapsible ? "schematic-form__object-fieldset--collapsible" : undefined)}>
+      {collapsed != null ? (
+        <ObjectFieldsetHeader
+          collapsed={collapsed}
+          disabled={context.disabled}
+          label={label}
+          onToggle={() => context.setObjectExpanded(pointer, !expanded)}
+        />
+      ) : options.root ? (
         <>
           {label ? <TypographyHeading level={2} slot={null}>{label}</TypographyHeading> : null}
         </>
       ) : (
         label ? <FieldsetLegend>{label}</FieldsetLegend> : null
       )}
-      <FieldsetGroup className="schematic-form__field-group">
-        {options.root ? (
-          schema.description ? (
-            <TypographyParagraph color="muted" size="base" slot={null}>
-              {schema.description}
-            </TypographyParagraph>
-          ) : null
-        ) : (
-          schema.description ? <FieldDescription>{schema.description}</FieldDescription> : null
-        )}
-        {keys.map((key) => {
-          const child = schema.properties?.[key];
-          if (!child) return null;
-          const childIsRequired = required.has(key);
-          if (childIsRequired && isSingleEnumSchema(child, context.rootSchema, resolved.refStack)) return null;
-          return renderSchema(child, [...path, key], childIsRequired, context, resolved.refStack);
-        })}
-      </FieldsetGroup>
+      {collapsed != null && description ? (
+        <div className="schematic-form__object-description">{description}</div>
+      ) : null}
+      {collapsed != null ? (
+        <div className="schematic-form__object-content" hidden={collapsed}>
+          {fieldGroup}
+        </div>
+      ) : (
+        fieldGroup
+      )}
     </Fieldset>
   );
 }
@@ -631,6 +709,64 @@ function getObjectFieldsetLabel(
   if (options.forceTitle) return getLabel(schema, path, "Form");
   if (options.omitUntitledLegend) return typeof schema.title === "string" && schema.title.trim() ? schema.title.trim() : undefined;
   return getExplicitOrPropertyLabel(schema, path);
+}
+
+function ObjectFieldsetHeader({
+  collapsed,
+  disabled,
+  label,
+  onToggle,
+}: {
+  collapsed: boolean;
+  disabled: boolean;
+  label?: string;
+  onToggle(): void;
+}) {
+  if (!label) {
+    return (
+      <div className="schematic-form__object-header">
+        <span aria-hidden="true" className="schematic-form__object-header-label" />
+        <ObjectCollapseToggle collapsed={collapsed} disabled={disabled} label={label} onToggle={onToggle} />
+      </div>
+    );
+  }
+
+  return (
+    <FieldsetLegend className="schematic-form__object-header">
+      <span className="schematic-form__object-header-label">{label}</span>
+      <ObjectCollapseToggle collapsed={collapsed} disabled={disabled} label={label} onToggle={onToggle} />
+    </FieldsetLegend>
+  );
+}
+
+function ObjectCollapseToggle({
+  collapsed,
+  disabled,
+  label,
+  onToggle,
+}: {
+  collapsed: boolean;
+  disabled: boolean;
+  label?: string;
+  onToggle(): void;
+}) {
+  const expanded = !collapsed;
+  return (
+    <button
+      aria-expanded={expanded}
+      aria-label={`${expanded ? "Collapse" : "Expand"} ${label ?? "object section"}`}
+      className="schematic-form__object-toggle"
+      disabled={disabled}
+      type="button"
+      onClick={onToggle}
+    >
+      <span
+        aria-hidden="true"
+        className="schematic-form__object-toggle-icon"
+        data-expanded={expanded ? "true" : undefined}
+      />
+    </button>
+  );
 }
 
 function getArrayItemActionLabel(schema: JsonSchema): string {
@@ -787,7 +923,7 @@ function renderArrayItemSchema<TData>(
   if (branch) return renderBranch(schema, path, true, branch.branches, context, {surface: false});
 
   if (getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}) === "object") {
-    return renderObjectFieldset(schema, path, context, {forceTitle: true}, resolved.refStack);
+    return renderObjectFieldset(schema, path, context, {collapsible: true, forceTitle: true}, resolved.refStack);
   }
 
   if (isEnumSchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
@@ -922,7 +1058,7 @@ function renderBranchVariant<TData>(
   if (branch) return renderBranch(schema, path, required, branch.branches, context, options);
 
   if (getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack}) === "object") {
-    return renderObjectFieldset(schema, path, context, {omitUntitledLegend: true}, resolved.refStack);
+    return renderObjectFieldset(schema, path, context, {collapsible: true, omitUntitledLegend: true}, resolved.refStack);
   }
 
   if (options.surface === false && isEnumSchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
@@ -1953,6 +2089,12 @@ function focusFirstNestedField(form: HTMLFormElement | null, pointer: string) {
     target.click();
     return;
   }
+}
+
+function getPointerAncestors(pointer: string): string[] {
+  if (pointer === "/" || !pointer.startsWith("/")) return [];
+  const segments = pointer.slice(1).split("/");
+  return segments.slice(0, -1).map((_, index) => `/${segments.slice(0, index + 1).join("/")}`);
 }
 
 function getFocusableTarget(container: HTMLElement): HTMLElement | null {
