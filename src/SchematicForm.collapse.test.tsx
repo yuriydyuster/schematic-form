@@ -1,6 +1,6 @@
 import {render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {describe, expect, test, vi} from "vitest";
+import {beforeEach, describe, expect, test, vi} from "vitest";
 
 import {SchematicForm} from "./SchematicForm";
 import type {JsonSchema, SchematicFormState} from "./types";
@@ -72,7 +72,54 @@ const branchSchema = {
   },
 } satisfies JsonSchema;
 
+const summarySchema = {
+  type: "object",
+  title: "Summary form",
+  properties: {
+    section: {
+      type: "object",
+      title: "Section",
+      description: "Summary section description.",
+      required: ["kind"],
+      properties: {
+        kind: {type: "string", title: "Kind", enum: ["fixed"]},
+        short: {type: "string", title: "Short label"},
+        longValue: {type: "string", title: "Extremely long label title"},
+        nested: {
+          type: "object",
+          title: "Nested group",
+          properties: {
+            deep: {type: "string", title: "Deepest label"},
+          },
+        },
+        enabled: {type: "boolean", title: "Enabled"},
+      },
+    },
+  },
+} satisfies JsonSchema;
+
+const overflowSummarySchema = {
+  type: "object",
+  title: "Overflow summary form",
+  properties: {
+    section: {
+      type: "object",
+      title: "Section",
+      properties: Object.fromEntries(
+        Array.from({length: 11}, (_, index) => [
+          `field${index + 1}`,
+          {type: "string", title: `Field ${index + 1}`},
+        ]),
+      ),
+    },
+  },
+} satisfies JsonSchema;
+
 describe("SchematicForm collapsible object surfaces", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   test("renders nested object surfaces with an expand and collapse toggle", async () => {
     const user = userEvent.setup();
     const {container} = render(<SchematicForm schema={profileSchema} />);
@@ -163,5 +210,80 @@ describe("SchematicForm collapsible object surfaces", () => {
 
     expect(within(branch).getByRole("button", {name: "Expand Pickup"})).toHaveAttribute("aria-expanded", "false");
     expect(within(branch).getByLabelText("Store")).not.toBeVisible();
+  });
+
+  test("shows collapsed object values as primary default small chips", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={summarySchema}
+        defaultValue={{
+          section: {
+            short: "Alpha",
+            longValue: "abcdefghijklmnopqrstuvwxyz",
+            nested: {deep: "Nested value"},
+            enabled: false,
+          },
+        }}
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    expect(within(section).getByText("Summary section description.")).toBeVisible();
+
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(5);
+    for (const chip of chips) {
+      expect(chip).toHaveClass("chip--default", "chip--primary", "chip--sm");
+    }
+    expect(within(summary as HTMLElement).getByText("Alpha").tagName).toBe("STRONG");
+    expect(summary).toHaveTextContent("Kind: fixed");
+    expect(summary).toHaveTextContent("Short label: Alpha");
+    expect(summary).toHaveTextContent("Extremely long label...: abcdefghijklmnopqrst...");
+    expect(summary).toHaveTextContent("Deepest label: Nested value");
+    expect(summary).toHaveTextContent("Enabled: Off");
+  });
+
+  test("limits collapsed object value chips to ten plus overflow marker", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={overflowSummarySchema}
+        defaultValue={{
+          section: Object.fromEntries(Array.from({length: 11}, (_, index) => [`field${index + 1}`, `Value ${index + 1}`])),
+        }}
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(11);
+    expect(chips.at(-1)).toHaveTextContent("...");
+    expect(section.querySelector(".schematic-form__object-summary")).not.toHaveTextContent("Value 11");
+  });
+
+  test("persists collapsed and expanded object state across remounts", async () => {
+    const user = userEvent.setup();
+
+    const first = render(<SchematicForm schema={profileSchema} />);
+    await user.click(within(getSurface(first.container, "/owner")).getByRole("button", {name: "Collapse Owner"}));
+    await waitFor(() => expect(getSurface(first.container, "/owner")).toHaveAttribute("data-sf-collapsed", "true"));
+    first.unmount();
+
+    const second = render(<SchematicForm schema={profileSchema} />);
+    expect(getSurface(second.container, "/owner")).toHaveAttribute("data-sf-collapsed", "true");
+
+    await user.click(within(getSurface(second.container, "/owner")).getByRole("button", {name: "Expand Owner"}));
+    await waitFor(() => expect(getSurface(second.container, "/owner")).not.toHaveAttribute("data-sf-collapsed"));
+    second.unmount();
+
+    const third = render(<SchematicForm schema={profileSchema} />);
+    expect(getSurface(third.container, "/owner")).not.toHaveAttribute("data-sf-collapsed");
   });
 });

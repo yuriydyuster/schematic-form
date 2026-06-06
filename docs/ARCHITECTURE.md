@@ -92,7 +92,7 @@ The component renders with HeroUI React components and keeps SchematicForm CSS t
 
 - The root form, fields, controls, surfaces, arrays, and branches are full width.
 - Object and generic array levels render transparent HeroUI `Surface` wrappers with same-level `Fieldset` structure.
-- Non-root object surfaces render a native `button` disclosure trigger inside the HeroUI `Surface`/`Fieldset` structure so large nested sections are collapsible while remaining expanded by default. Collapsed state is UI-only, keyed by data pointer, and is not persisted or emitted as form data.
+- Non-root object surfaces render a native `button` disclosure trigger inside the HeroUI `Surface`/`Fieldset` structure so large nested sections are collapsible while remaining expanded by default. Expansion state is UI-only, keyed by data pointer, persisted best-effort in `localStorage` by schema fingerprint, and is not emitted as form data.
 - Invalid submit expands collapsed object ancestors before focusing the first invalid field.
 - Complex groups use `Fieldset`, `Legend`, and description/error slots where possible.
 - The form uses `validationBehavior="aria"` so JSON Schema validation remains the source of truth.

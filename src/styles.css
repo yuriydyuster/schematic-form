@@ -67,6 +67,18 @@
   @apply mt-0;
 }
 
+.schematic-form__object-summary {
+  @apply flex flex-wrap gap-1;
+}
+
+.schematic-form__object-summary-chip {
+  @apply max-w-full;
+}
+
+.schematic-form__object-summary-chip .chip__label {
+  @apply min-w-0 truncate;
+}
+
 .schematic-form__object-content {
   @apply block;
 }

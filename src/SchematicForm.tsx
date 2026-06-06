@@ -71,6 +71,8 @@ const Button = H.Button;
 const Checkbox = H.Checkbox;
 const CheckboxGroup = H.CheckboxGroup;
 const Calendar = H.Calendar;
+const Chip = H.Chip ?? (({color: _color, size: _size, variant: _variant, ...props}: React.HTMLAttributes<HTMLSpanElement> & {color?: string; size?: string; variant?: string}) =>
+  <span {...props} />);
 const DateField = H.DateField;
 const DatePicker = H.DatePicker;
 const Description = H.Description ?? ((props: React.HTMLAttributes<HTMLParagraphElement>) => <p {...props} />);
@@ -138,6 +140,7 @@ const RadioIndicator = Radio?.Indicator ?? ((props: React.HTMLAttributes<HTMLSpa
 const RadioContent = Radio?.Content ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const CheckboxControl = Checkbox?.Control ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const CheckboxIndicator = Checkbox?.Indicator ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
+const ChipLabel = Chip?.Label ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const CheckboxContent = Checkbox?.Content ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const SwitchControl = Switch?.Control ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
 const SwitchThumb = Switch?.Thumb ?? ((props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props} />);
@@ -171,6 +174,36 @@ type DraftSaveTarget = {
   payload: SchematicFormDraftPayload;
 };
 type BranchSelectionState = Record<string, number | null>;
+type ObjectExpansionState = Record<string, boolean>;
+const objectExpansionStoragePrefix = "schematic-form:object-expanded:";
+
+function createObjectExpansionStorageKey(schemaFingerprint: string): string {
+  return `${objectExpansionStoragePrefix}${schemaFingerprint}`;
+}
+
+function readObjectExpansionState(key: string): ObjectExpansionState {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeObjectExpansionState(key: string, state: ObjectExpansionState) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // Object expansion state is best-effort UI state.
+  }
+}
 
 export function SchematicForm<TData = unknown>({
   schema,
@@ -190,6 +223,8 @@ export function SchematicForm<TData = unknown>({
 }: SchematicFormProps<TData>) {
   const jsonSchema = schema as JsonSchema;
   const mergedMessages = {...defaultMessages, ...messages};
+  const schemaFingerprint = useMemo(() => createSchemaFingerprint(jsonSchema), [jsonSchema]);
+  const objectExpansionStorageKey = useMemo(() => createObjectExpansionStorageKey(schemaFingerprint), [schemaFingerprint]);
   const initialData = useMemo(() => {
     const baseData = defaultValue !== undefined
       ? defaultValue as unknown
@@ -203,11 +238,14 @@ export function SchematicForm<TData = unknown>({
   const [branchSelection, setBranchSelection] = useState<BranchSelectionState>({});
   const [branchValueCache, setBranchValueCache] = useState<BranchValueCache>({});
   const [rowIdsByPointer, setRowIdsByPointer] = useState<Record<string, string[]>>({});
-  const [objectExpandedByPointer, setObjectExpandedByPointer] = useState<Record<string, boolean>>({});
+  const [objectExpandedByPointer, setObjectExpandedByPointer] = useState<ObjectExpansionState>(() =>
+    readObjectExpansionState(objectExpansionStorageKey),
+  );
   const rowIdCounter = useRef(0);
   const formRef = useRef<HTMLFormElement | null>(null);
   const draftSaveTimeoutRef = useRef<number | null>(null);
   const latestDraftRef = useRef<DraftSaveTarget | null>(null);
+  const objectExpansionHydratedKeyRef = useRef(objectExpansionStorageKey);
   const isControlled = value !== undefined;
   const shouldPersistDraft = persistence != null && !isControlled;
   const draftStorage = useMemo(
@@ -217,7 +255,6 @@ export function SchematicForm<TData = unknown>({
   const draftKey = persistence?.key ?? "";
   const draftDebounceMs = persistence?.debounceMs ?? 250;
   const clearPersistedDraftOnValidSubmit = persistence?.clearOnValidSubmit ?? true;
-  const schemaFingerprint = useMemo(() => createSchemaFingerprint(jsonSchema), [jsonSchema]);
   const [draftHydrated, setDraftHydrated] = useState(!shouldPersistDraft);
   const data = (isControlled ? value : internalData) as unknown;
   const validationSchema = useMemo(
@@ -241,6 +278,17 @@ export function SchematicForm<TData = unknown>({
       }) satisfies SchematicFormState<TData>,
     [data, validation.errors, validation.isValid],
   );
+
+  useEffect(() => {
+    if (objectExpansionHydratedKeyRef.current === objectExpansionStorageKey) return;
+    objectExpansionHydratedKeyRef.current = objectExpansionStorageKey;
+    setObjectExpandedByPointer(readObjectExpansionState(objectExpansionStorageKey));
+  }, [objectExpansionStorageKey]);
+
+  useEffect(() => {
+    if (objectExpansionHydratedKeyRef.current !== objectExpansionStorageKey) return;
+    writeObjectExpansionState(objectExpansionStorageKey, objectExpandedByPointer);
+  }, [objectExpandedByPointer, objectExpansionStorageKey]);
 
   const clearScheduledDraftSave = useCallback(() => {
     if (draftSaveTimeoutRef.current == null) return;
@@ -542,7 +590,7 @@ type RendererContext<TData> = {
   rebaseBranchMetadata(arrayPointer: string, operation: ArrayPointerRebaseOperation): void;
   commitData(data: unknown): void;
   makeRowId(): string;
-  objectExpandedByPointer: Record<string, boolean>;
+  objectExpandedByPointer: ObjectExpansionState;
   rootSchema: JsonSchema;
   setObjectExpanded(pointer: string, expanded: boolean): void;
 };
@@ -648,6 +696,7 @@ function renderObjectFieldset<TData>(
   const collapsed = options.collapsed ?? (options.collapsible ? !expanded : undefined);
   const keys = getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   const required = new Set(schema.required ?? []);
+  const summary = collapsed === true ? getCollapsedObjectSummary(schema, path, context, resolved.refStack) : null;
   const description = options.root ? (
     schema.description ? (
       <TypographyParagraph color="muted" size="base" slot={null}>
@@ -689,6 +738,7 @@ function renderObjectFieldset<TData>(
       {collapsed != null && description ? (
         <div className="schematic-form__object-description">{description}</div>
       ) : null}
+      {collapsed === true && summary ? <CollapsedObjectSummary summary={summary} /> : null}
       {collapsed != null ? (
         <div className="schematic-form__object-content" hidden={collapsed}>
           {fieldGroup}
@@ -767,6 +817,150 @@ function ObjectCollapseToggle({
       />
     </button>
   );
+}
+
+const collapsedObjectSummaryLimit = 10;
+const collapsedObjectSummaryTextLimit = 20;
+
+type CollapsedObjectSummary = {
+  items: Array<{label: string; value: string}>;
+  hasOverflow: boolean;
+};
+
+function CollapsedObjectSummary({summary}: {summary: CollapsedObjectSummary}) {
+  if (summary.items.length === 0 && !summary.hasOverflow) return null;
+  return (
+    <div className="schematic-form__object-summary" aria-label="Collapsed object values">
+      {summary.items.map((item, index) => (
+        <Chip
+          className="schematic-form__object-summary-chip"
+          color="default"
+          key={`${item.label}-${item.value}-${index}`}
+          size="sm"
+          title={`${item.label}: ${item.value}`}
+          variant="primary"
+        >
+          <ChipLabel>
+            {trimSummaryText(item.label)}: <strong>{trimSummaryText(item.value)}</strong>
+          </ChipLabel>
+        </Chip>
+      ))}
+      {summary.hasOverflow ? (
+        <Chip className="schematic-form__object-summary-chip" color="default" size="sm" variant="primary">
+          ...
+        </Chip>
+      ) : null}
+    </div>
+  );
+}
+
+function getCollapsedObjectSummary<TData>(
+  schema: JsonSchema,
+  path: PathSegment[],
+  context: RendererContext<TData>,
+  refStack: string[] = [],
+): CollapsedObjectSummary {
+  const items: CollapsedObjectSummary["items"] = [];
+  collectCollapsedObjectSummaryItems(schema, path, getAtPath(context.data, path), context, refStack, items);
+  return {
+    items: items.slice(0, collapsedObjectSummaryLimit),
+    hasOverflow: items.length > collapsedObjectSummaryLimit,
+  };
+}
+
+function collectCollapsedObjectSummaryItems<TData>(
+  schema: JsonSchema,
+  path: PathSegment[],
+  value: unknown,
+  context: RendererContext<TData>,
+  refStack: string[],
+  items: CollapsedObjectSummary["items"],
+) {
+  if (items.length > collapsedObjectSummaryLimit) return;
+
+  const resolved = resolveRenderSchema(schema, context, refStack);
+  schema = resolved.schema;
+
+  if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return;
+
+  const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
+  if (branch) {
+    const selected = getSelectedSummaryBranch(schema, path, branch.branches, context, resolved.refStack);
+    if (selected) collectCollapsedObjectSummaryItems(selected, path, value, context, resolved.refStack, items);
+    return;
+  }
+
+  const type = getSchemaType(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
+
+  if (type === "object") {
+    if (!isRecord(value)) return;
+    for (const key of getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
+      if (items.length > collapsedObjectSummaryLimit) return;
+      const child = schema.properties?.[key];
+      if (!child) continue;
+      collectCollapsedObjectSummaryItems(child, [...path, key], value[key], context, resolved.refStack, items);
+    }
+    return;
+  }
+
+  if (type === "array") {
+    if (!Array.isArray(value) || value.length === 0) return;
+    const itemSchema = getSingleArrayItemSchema(schema, context.rootSchema, resolved.refStack);
+    if (!itemSchema) return;
+    value.forEach((item, index) => {
+      if (items.length > collapsedObjectSummaryLimit) return;
+      collectCollapsedObjectSummaryItems(itemSchema, [...path, index], item, context, resolved.refStack, items);
+    });
+    return;
+  }
+
+  if (!hasCollapsedSummaryValue(value)) return;
+
+  items.push({
+    label: getCollapsedSummaryLabel(schema, path),
+    value: formatCollapsedSummaryValue(value),
+  });
+}
+
+function getSelectedSummaryBranch<TData>(
+  schema: JsonSchema,
+  path: PathSegment[],
+  branches: JsonSchema[],
+  context: RendererContext<TData>,
+  refStack: string[],
+): JsonSchema | undefined {
+  const pointer = toPointer(path);
+  const selectedIndex = Object.prototype.hasOwnProperty.call(context.branchSelection, pointer)
+    ? context.branchSelection[pointer] ?? undefined
+    : getDefaultBranchIndex(schema, branches, {rootSchema: context.rootSchema, refStack});
+  return selectedIndex == null ? undefined : branches[selectedIndex];
+}
+
+function hasCollapsedSummaryValue(value: unknown): value is JsonPrimitive {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return typeof value === "number" || typeof value === "boolean";
+}
+
+function formatCollapsedSummaryValue(value: JsonPrimitive): string {
+  if (typeof value === "boolean") return value ? "On" : "Off";
+  return optionLabel(value);
+}
+
+function getCollapsedSummaryLabel(schema: JsonSchema, path: PathSegment[]): string {
+  if (typeof schema.title === "string" && schema.title.trim()) return schema.title.trim();
+  for (let index = path.length - 1; index >= 0; index -= 1) {
+    const segment = path[index];
+    if (typeof segment === "string" && segment.trim()) return segment;
+  }
+  return getLabel(schema, path, "Item");
+}
+
+function trimSummaryText(value: string): string {
+  const symbols = Array.from(value);
+  return symbols.length > collapsedObjectSummaryTextLimit
+    ? `${symbols.slice(0, collapsedObjectSummaryTextLimit).join("")}...`
+    : value;
 }
 
 function getArrayItemActionLabel(schema: JsonSchema): string {

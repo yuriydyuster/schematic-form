@@ -16,12 +16,12 @@ Implementation note: the first implementation used HeroUI `Disclosure`, but sche
 - Add a compact top-right toggle for each collapsible object surface.
 - Preserve `data-sf-path` and stable `schematic-form__*` selectors.
 - Preserve controlled/uncontrolled data semantics and draft persistence payloads.
+- Persist expanded/collapsed UI state across page refreshes without emitting it as form data.
 - Expand collapsed ancestors before focusing the first invalid field on submit.
 
 ## Non-Goals
 
 - Do not add `uiSchema`.
-- Do not persist collapsed state.
 - Do not change validation behavior or Ajv sanitization.
 - Do not make arrays, branch surfaces, or scalar group surfaces collapsible in this pass.
 - Do not introduce schema keywords for UI behavior.
@@ -35,9 +35,10 @@ Implementation note: the first implementation used HeroUI `Disclosure`, but sche
 5. Add a top-right icon-only disclosure trigger with an accessible label derived from the object label.
 6. Add nested issue detection so object surfaces can expose an invalid state when a visible issue exists inside them.
 7. On invalid submit, mark ancestor object pointers as expanded before the existing first-invalid-field focus pass runs.
-8. Style new semantic selectors in `src/styles.css` using Tailwind `@apply` and HeroUI tokens.
-9. Update README and architecture docs to document collapsible nested object surfaces.
-10. Add focused React Testing Library coverage for collapse/expand behavior, data preservation, and invalid-submit auto-expand.
+8. Persist object expansion state best-effort in `localStorage`, keyed by schema fingerprint.
+9. Style new semantic selectors in `src/styles.css` using Tailwind `@apply` and HeroUI tokens.
+10. Update README and architecture docs to document collapsible nested object surfaces.
+11. Add focused React Testing Library coverage for collapse/expand behavior, data preservation, refresh persistence, and invalid-submit auto-expand.
 
 ## Test Plan
 
