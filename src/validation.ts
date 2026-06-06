@@ -69,6 +69,7 @@ export function sanitizeSchemaForValidation(
   if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema})) return true;
 
   const output: JsonSchema = {};
+  const draft202012 = usesDraft202012(context.rootSchema);
   for (const [key, value] of Object.entries(schema)) {
     if (ignoredKeys.has(key)) continue;
     if (key === "format" && !getSupportedFormat(schema)) continue;
@@ -109,10 +110,12 @@ export function sanitizeSchemaForValidation(
     if (key === "required") continue;
     if (key === "items") {
       if (Array.isArray(value)) {
-        output.items = value.map((item) => {
+        const sanitizedItems = value.map((item) => {
           const sanitizedItem = sanitizeSchemaValue(item, context);
           return sanitizedItem === true ? {} : (sanitizedItem as JsonSchema);
         });
+        if (draft202012) output.prefixItems = sanitizedItems;
+        else output.items = sanitizedItems;
       } else if (isSchema(value)) {
         const sanitizedItems = sanitizeSchemaForValidation(value, context);
         output.items = sanitizedItems === true ? {} : (sanitizedItems as JsonSchema);
@@ -120,11 +123,16 @@ export function sanitizeSchemaForValidation(
       continue;
     }
     if (key === "additionalItems") {
+      const hasTupleItems = Array.isArray(schema.items);
+      if (draft202012 && !hasTupleItems) continue;
       if (isSchema(value)) {
         const sanitizedAdditionalItems = sanitizeSchemaForValidation(value, context);
-        output.additionalItems = sanitizedAdditionalItems === true ? {} : (sanitizedAdditionalItems as JsonSchema);
+        const additionalItems = sanitizedAdditionalItems === true ? {} : (sanitizedAdditionalItems as JsonSchema);
+        if (draft202012) output.items = additionalItems;
+        else output.additionalItems = additionalItems;
       } else {
-        output.additionalItems = value as boolean;
+        if (draft202012) (output as Record<string, unknown>)["items"] = value as boolean;
+        else output.additionalItems = value as boolean;
       }
       continue;
     }

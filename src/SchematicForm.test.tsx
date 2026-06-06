@@ -1261,6 +1261,22 @@ describe("SchematicForm", () => {
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
   });
 
+  test("shows field errors after submitting an incomplete selected local ref branch", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
+    expect(within(item).queryByText("Property name used as the object key.")).not.toBeInTheDocument();
+    expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
+  });
+
   test("renders local $ref nodes with sibling title and description", async () => {
     const user = userEvent.setup();
     const schema = {

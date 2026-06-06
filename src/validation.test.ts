@@ -72,6 +72,41 @@ describe("validation", () => {
     expect(validator.validate({tags: ["A", "B"]}).isValid).toBe(true);
   });
 
+  test("converts tuple array items for draft 2020-12 validation", () => {
+    const schema = {
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      properties: {
+        rows: {
+          type: "array",
+          items: [
+            {type: "object", required: ["name"], properties: {name: {type: "string"}}},
+          ],
+          additionalItems: {type: "string"},
+        },
+      },
+    } satisfies JsonSchema;
+
+    expect(sanitizeSchemaForValidation(schema)).toMatchObject({
+      properties: {
+        rows: {
+          prefixItems: [
+            {type: "object", required: ["name"], properties: {name: {type: "string"}}},
+          ],
+          items: {type: "string"},
+        },
+      },
+    });
+
+    const validator = createSchemaValidator(schema);
+
+    expect(validator.validate({rows: [{name: "Ada"}, "extra"]}).isValid).toBe(true);
+    const result = validator.validate({rows: [{}]});
+    expect(result.isValid).toBe(false);
+    expect(result.errors[0]).toMatch(/rows\.0\.name:/);
+    expect(result.errors[0]).not.toMatch(/Schema could not be compiled/);
+  });
+
   test("omits branch subschema noise when oneOf itself fails", () => {
     const validator = createSchemaValidator({
       type: "object",
