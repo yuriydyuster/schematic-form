@@ -525,6 +525,86 @@ describe("SchematicForm", () => {
     });
   });
 
+  test("cleans optional empty array fields while preserving required empty arrays", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Array cleanup",
+      required: ["requiredItems"],
+      properties: {
+        optionalItems: {
+          type: "array",
+          title: "Optional items",
+          items: {type: "string", title: "Optional item"},
+        },
+        requiredItems: {
+          type: "array",
+          title: "Required items",
+          items: {type: "string", title: "Required item"},
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(
+      <SchematicForm
+        defaultValue={{optionalItems: [], requiredItems: []}}
+        schema={schema}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredItems: []});
+    });
+  });
+
+  test("removes optional array fields when the last repeatable row is removed", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Array row cleanup",
+      required: ["requiredItems"],
+      properties: {
+        optionalItems: {
+          type: "array",
+          title: "Optional items",
+          items: {type: "string", title: "Optional item"},
+        },
+        requiredItems: {
+          type: "array",
+          title: "Required items",
+          items: {type: "string", title: "Required item"},
+        },
+      },
+    } satisfies JsonSchema;
+    const {container} = render(
+      <SchematicForm
+        defaultValue={{optionalItems: ["draft"], requiredItems: ["fixed"]}}
+        schema={schema}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    const optionalRow = container.querySelector('.schematic-form__array-row[data-sf-path="/optionalItems/0"]');
+    expect(optionalRow).toBeInTheDocument();
+    await user.click(within(optionalRow as HTMLElement).getByRole("button", {name: /remove/i}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).not.toHaveProperty("optionalItems");
+      expect(lastState?.data).toMatchObject({requiredItems: ["fixed"]});
+    });
+
+    const requiredRow = container.querySelector('.schematic-form__array-row[data-sf-path="/requiredItems/0"]');
+    expect(requiredRow).toBeInTheDocument();
+    await user.click(within(requiredRow as HTMLElement).getByRole("button", {name: /remove/i}));
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredItems: []});
+    });
+  });
+
   test("restores uncontrolled drafts after remount", async () => {
     const user = userEvent.setup();
     const storage = createMemoryStorage();

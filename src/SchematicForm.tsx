@@ -18,7 +18,6 @@ import {
   getAtPath,
   insertArrayItem,
   moveArrayItem,
-  removeArrayItem,
   setAtPath,
   toFieldPath,
   toPointer,
@@ -686,7 +685,9 @@ function renderArray<TData>(
   const removeItem = (index: number) => {
     const ids = getRowIds(context, pointer, items.length);
     context.rebaseBranchMetadata(pointer, {type: "remove", index});
-    context.commitData(removeArrayItem(context.data, path, index));
+    const nextItems = Array.isArray(value) ? [...value] : [];
+    nextItems.splice(index, 1);
+    context.setFieldValue(path, schema, nextItems, required);
     context.setRowIdsByPointer((current) => ({
       ...current,
       [pointer]: ids.filter((_, idIndex) => idIndex !== index),
@@ -1687,6 +1688,7 @@ function materializeRequiredImplicitValues(
 
   const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
   if (type === "object") return materializeObjectRequiredImplicitValues(schema, data, rootSchema, resolved.refStack);
+  if (type === "array" && data === undefined) return [];
   if (type === "array" && Array.isArray(data)) {
     const itemSchema = getSingleArrayItemSchema(schema, rootSchema);
     if (!itemSchema) return data;
@@ -1726,6 +1728,13 @@ function materializeObjectRequiredImplicitValues(
     const currentValue = nextData[key];
 
     const childSchema = resolveSchemaWithRoot(child, rootSchema, resolved.refStack).schema;
+    const childType = getSchemaType(childSchema, {rootSchema, refStack: resolved.refStack});
+
+    if (!childIsRequired && childType === "array" && Array.isArray(currentValue) && currentValue.length === 0) {
+      nextData = deleteObjectKey(nextData, key);
+      changed = true;
+      continue;
+    }
 
     const childSingleEnumValue = childIsRequired ? getSingleEnumValue(child, {rootSchema, refStack: resolved.refStack}) : undefined;
     if (childSingleEnumValue !== undefined && (!hasValue || currentValue !== childSingleEnumValue)) {
@@ -1744,6 +1753,11 @@ function materializeObjectRequiredImplicitValues(
     if (!shouldRecurse) continue;
 
     const nextValue = materializeRequiredImplicitValues(child, hasValue ? currentValue : undefined, rootSchema, resolved.refStack);
+    if (!childIsRequired && childType === "array" && Array.isArray(nextValue) && nextValue.length === 0) {
+      nextData = deleteObjectKey(nextData, key);
+      changed = true;
+      continue;
+    }
     if (nextValue !== currentValue && (nextValue !== undefined || hasValue)) {
       nextData = setObjectKey(nextData, key, nextValue);
       changed = true;
@@ -1775,6 +1789,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function setObjectKey(source: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
   return {...source, [key]: value};
+}
+
+function deleteObjectKey(source: Record<string, unknown>, key: string): Record<string, unknown> {
+  const {[key]: _deleted, ...rest} = source;
+  return rest;
 }
 
 function getSingleArrayItemSchema(
