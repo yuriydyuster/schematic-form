@@ -117,6 +117,37 @@ const scalarArraySummarySchema = {
   },
 } satisfies JsonSchema;
 
+const implicitSummaryLabelSchema = {
+  type: "object",
+  title: "Implicit summary label form",
+  properties: {
+    section: {
+      type: "object",
+      title: "Section",
+      properties: {
+        untitled: {type: "string"},
+      },
+    },
+  },
+} satisfies JsonSchema;
+
+const chipFocusSafetySchema = {
+  type: "object",
+  title: "Chip focus safety form",
+  properties: {
+    section: {
+      type: "object",
+      title: "Section",
+      properties: {
+        note: {type: "string", title: "Note"},
+        count: {type: "integer", title: "Count"},
+        enabled: {type: "boolean", title: "Enabled"},
+        status: {type: "string", title: "Status", enum: ["A", "B", "C", "D", "E", "F"]},
+      },
+    },
+  },
+} satisfies JsonSchema;
+
 const overflowSummarySchema = {
   type: "object",
   title: "Overflow summary form",
@@ -133,6 +164,76 @@ const overflowSummarySchema = {
     },
   },
 } satisfies JsonSchema;
+
+const overflowValidationSchema = {
+  type: "object",
+  title: "Overflow validation form",
+  properties: {
+    section: {
+      type: "object",
+      title: "Section",
+      properties: Object.fromEntries(
+        Array.from({length: 12}, (_, index) => [
+          `field${index + 1}`,
+          {type: "string", title: `Field ${index + 1}`, format: "email"},
+        ]),
+      ),
+    },
+  },
+} satisfies JsonSchema;
+
+const recursiveOverflowSchema = {
+  type: "object",
+  title: "Recursive overflow form",
+  properties: {
+    tree: {
+      $ref: "#/$defs/node",
+      title: "Tree",
+    },
+  },
+  $defs: {
+    node: {
+      type: "object",
+      title: "Node",
+      properties: {
+        email: {type: "string", title: "Email", format: "email"},
+        children: {
+          type: "array",
+          title: "Children",
+          items: {$ref: "#/$defs/node"},
+        },
+      },
+    },
+  },
+} satisfies JsonSchema;
+
+function createOverflowEmailValues(overrides: Record<string, string> = {}) {
+  return {
+    ...Object.fromEntries(
+      Array.from({length: 12}, (_, index) => [`field${index + 1}`, `field${index + 1}@example.com`]),
+    ),
+    ...overrides,
+  };
+}
+
+function createRecursiveNodeChain(depth: number, invalidDepth?: number): Record<string, unknown> {
+  let next: Record<string, unknown> | undefined;
+  for (let level = depth; level >= 1; level -= 1) {
+    const node: Record<string, unknown> = {
+      email: level === invalidDepth ? "invalid email" : `node${level}@example.com`,
+      children: next ? [next] : [],
+    };
+    next = node;
+  }
+  return next ?? {};
+}
+
+function getSummaryChipByTitle(section: HTMLElement, title: string): HTMLElement {
+  const summary = section.querySelector(".schematic-form__object-summary");
+  const chip = summary?.querySelector(`.schematic-form__object-summary-chip[title="${title}"]`);
+  expect(chip).toBeInTheDocument();
+  return chip as HTMLElement;
+}
 
 describe("SchematicForm collapsible object surfaces", () => {
   beforeEach(() => {
@@ -293,6 +394,138 @@ describe("SchematicForm collapsible object surfaces", () => {
     expect(summary).toHaveTextContent("Alias #2: Beta");
   });
 
+  test("clicking explicit-label chips expands and focuses the exact field", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={summarySchema}
+        defaultValue={{
+          section: {
+            short: "Alpha",
+            longValue: "abcdefghijklmnopqrstuvwxyz",
+          },
+        }}
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    const shortChip = (summary as HTMLElement).querySelector('.schematic-form__object-summary-chip[title="Short label: Alpha"]');
+    expect(shortChip).toBeInTheDocument();
+    expect(shortChip).toHaveAttribute("data-clickable", "true");
+
+    await user.click(shortChip as HTMLElement);
+
+    await waitFor(() => expect(section).not.toHaveAttribute("data-sf-collapsed"));
+    expect(within(section).getByLabelText("Short label")).toHaveFocus();
+  });
+
+  test("hidden required single-value enum summary chips are not clickable", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={summarySchema}
+        defaultValue={{
+          section: {
+            short: "Alpha",
+            kind: "fixed",
+          },
+        }}
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+
+    const kindChip = getSummaryChipByTitle(section, "Kind: fixed");
+    expect(kindChip).not.toHaveAttribute("data-clickable");
+
+    await user.click(kindChip);
+
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+  });
+
+  test("chips without explicit labels are not clickable", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm schema={implicitSummaryLabelSchema} defaultValue={{section: {untitled: "Alpha"}}} />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    const untitledChip = (summary as HTMLElement).querySelector('.schematic-form__object-summary-chip[title="untitled: Alpha"]');
+    expect(untitledChip).toBeInTheDocument();
+    expect(untitledChip).not.toHaveAttribute("data-clickable");
+
+    await user.click(untitledChip as HTMLElement);
+
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+  });
+
+  test("chip navigation focuses controls without changing values", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={chipFocusSafetySchema}
+        defaultValue={{section: {note: "Alpha", count: 7, enabled: true, status: "A"}}}
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    const countField = section.querySelector('[data-sf-path="/section/count"] input');
+    expect(countField).toBeInTheDocument();
+    const enabledField = within(section.querySelector('[data-sf-path="/section/enabled"]') as HTMLElement).getByRole("switch", {name: "Enabled"});
+    const scrollBySpy = vi.spyOn(window, "scrollBy").mockImplementation(() => undefined);
+    const enabledRectSpy = vi.spyOn(enabledField, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 760,
+      width: 16,
+      height: 40,
+      top: 760,
+      right: 16,
+      bottom: 800,
+      left: 0,
+      toJSON: () => ({}) as unknown,
+    } as DOMRect);
+    const statusTrigger = section.querySelector('[data-sf-path="/section/status"] .select__trigger');
+    expect(statusTrigger).toBeInTheDocument();
+
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    await user.click(getSummaryChipByTitle(section, "Note: Alpha"));
+    expect(within(section).getByLabelText("Note")).toHaveFocus();
+
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    await user.click(getSummaryChipByTitle(section, "Count: 7"));
+    expect(countField as HTMLElement).toHaveFocus();
+    expect(countField).toHaveValue("7");
+
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    await user.click(getSummaryChipByTitle(section, "Enabled: On"));
+    await waitFor(() => expect(enabledField).toHaveFocus());
+    expect(scrollBySpy).toHaveBeenCalledWith(expect.objectContaining({behavior: "smooth"}));
+    expect(document.activeElement).toHaveAttribute("role", "switch");
+    const enabledSwitchRoot = enabledField.closest(".switch");
+    expect(enabledSwitchRoot).toHaveAttribute("data-sf-force-focus-visible", "true");
+    expect(enabledField).toBeChecked();
+
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    await user.click(getSummaryChipByTitle(section, "Status: A"));
+    expect(statusTrigger).toHaveFocus();
+    expect(enabledSwitchRoot).not.toHaveAttribute("data-sf-force-focus-visible");
+    expect(section.querySelector('[data-sf-path="/section/status"]')).toHaveTextContent("A");
+    expect(screen.queryByRole("option", {name: "A"})).not.toBeInTheDocument();
+
+    enabledRectSpy.mockRestore();
+    scrollBySpy.mockRestore();
+  });
+
   test("shows invalid collapsed fields as danger soft chips", async () => {
     const user = userEvent.setup();
     const {container} = render(
@@ -394,7 +627,177 @@ describe("SchematicForm collapsible object surfaces", () => {
     const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
     expect(chips).toHaveLength(11);
     expect(chips.at(-1)).toHaveTextContent("...");
+    expect(chips.at(-1)).toHaveClass("chip--default", "chip--primary", "chip--sm");
     expect(section.querySelector(".schematic-form__object-summary")).not.toHaveTextContent("Value 11");
+  });
+
+  test("shows danger overflow chip when hidden collapsed fields are invalid", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={overflowValidationSchema}
+        defaultValue={{
+          section: createOverflowEmailValues({field12: "invalid email"}),
+        }}
+        validationMode="change"
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(11);
+    const overflowChip = chips.at(-1);
+    expect(overflowChip).toHaveTextContent("...");
+    expect(overflowChip).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+    expect(summary).not.toHaveTextContent("Field 12: invalid email");
+    for (const chip of chips.slice(0, -1)) {
+      expect(chip).toHaveClass("chip--default", "chip--primary", "chip--sm");
+    }
+  });
+
+  test("clicking overflow chip navigates to first hidden invalid field", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={overflowValidationSchema}
+        defaultValue={{
+          section: createOverflowEmailValues({field12: "invalid email"}),
+        }}
+        validationMode="change"
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    const overflowChip = chips.at(-1);
+    expect(overflowChip).toHaveTextContent("...");
+    expect(overflowChip).toHaveAttribute("data-clickable", "true");
+
+    await user.click(overflowChip as HTMLElement);
+
+    await waitFor(() => expect(section).not.toHaveAttribute("data-sf-collapsed"));
+    expect(within(section).getByLabelText("Field 12")).toHaveFocus();
+  });
+
+  test("keeps neutral overflow chip when hidden collapsed fields are valid", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={overflowValidationSchema}
+        defaultValue={{
+          section: createOverflowEmailValues(),
+        }}
+        validationMode="change"
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(11);
+    const overflowChip = chips.at(-1);
+    expect(overflowChip).toHaveClass("chip--default", "chip--primary", "chip--sm");
+    expect(overflowChip).not.toHaveAttribute("data-clickable");
+
+    await user.click(overflowChip as HTMLElement);
+    expect(section).toHaveAttribute("data-sf-collapsed", "true");
+  });
+
+  test("keeps overflow chip neutral when only visible collapsed fields are invalid", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={overflowValidationSchema}
+        defaultValue={{
+          section: createOverflowEmailValues({field2: "invalid email"}),
+        }}
+        validationMode="change"
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    const visibleInvalidChip = within(summary as HTMLElement)
+      .getByText(/Field 2:/)
+      .closest(".schematic-form__object-summary-chip");
+    expect(visibleInvalidChip).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+    expect(chips.at(-1)).toHaveClass("chip--default", "chip--primary", "chip--sm");
+  });
+
+  test("shows danger overflow chip when both visible and hidden collapsed fields are invalid", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={overflowValidationSchema}
+        defaultValue={{
+          section: createOverflowEmailValues({field2: "invalid email", field12: "invalid email"}),
+        }}
+        validationMode="change"
+      />,
+    );
+
+    const section = getSurface(container, "/section");
+    await user.click(within(section).getByRole("button", {name: "Collapse Section"}));
+
+    const summary = section.querySelector(".schematic-form__object-summary");
+    const chips = Array.from(section.querySelectorAll(".schematic-form__object-summary-chip"));
+    const visibleInvalidChip = within(summary as HTMLElement)
+      .getByText(/Field 2:/)
+      .closest(".schematic-form__object-summary-chip");
+    expect(visibleInvalidChip).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+    expect(chips.at(-1)).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+  });
+
+  test("supports recursive $ref summaries and marks invalid hidden overflow", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={recursiveOverflowSchema}
+        defaultValue={{
+          tree: createRecursiveNodeChain(12, 12),
+        }}
+        validationMode="change"
+      />,
+    );
+
+    const tree = getSurface(container, "/tree");
+    await user.click(within(tree).getByRole("button", {name: "Collapse Tree"}));
+
+    const summary = tree.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    const chips = Array.from(tree.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(11);
+    expect(chips.at(-1)).toHaveClass("chip--danger", "chip--soft", "chip--sm");
+  });
+
+  test("stops deep recursive collapsed summary traversal without blocking rendering", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm
+        schema={recursiveOverflowSchema}
+        defaultValue={{
+          tree: createRecursiveNodeChain(15),
+        }}
+      />,
+    );
+
+    const tree = getSurface(container, "/tree");
+    await user.click(within(tree).getByRole("button", {name: "Collapse Tree"}));
+
+    const summary = tree.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    const chips = Array.from(tree.querySelectorAll(".schematic-form__object-summary-chip"));
+    expect(chips).toHaveLength(11);
   });
 
   test("persists collapsed and expanded object state across remounts", async () => {

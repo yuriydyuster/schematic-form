@@ -176,7 +176,10 @@ type DraftSaveTarget = {
 };
 type BranchSelectionState = Record<string, number | null>;
 type ObjectExpansionState = Record<string, boolean>;
+type BranchSelectionTraversalState = {remainingNodes: number};
 const objectExpansionStoragePrefix = "schematic-form:object-expanded:";
+const branchSelectionTraversalDepthLimit = 128;
+const branchSelectionTraversalNodeLimit = 4000;
 
 function createObjectExpansionStorageKey(schemaFingerprint: string): string {
   return `${objectExpansionStoragePrefix}${schemaFingerprint}`;
@@ -449,16 +452,29 @@ export function SchematicForm<TData = unknown>({
     setObjectExpandedByPointer((current) => ({...current, [pointer]: expanded}));
   }, []);
 
-  const expandObjectAncestorsForIssue = useCallback((issue: ValidationIssue | undefined) => {
-    if (!issue) return;
-    const ancestors = getPointerAncestors(issue.path);
+  const expandObjectAncestors = useCallback((pointer: string) => {
+    const ancestors = getPointerAncestors(pointer);
     if (ancestors.length === 0) return;
     setObjectExpandedByPointer((current) => {
       const next = {...current};
-      for (const pointer of ancestors) next[pointer] = true;
+      for (const ancestor of ancestors) next[ancestor] = true;
       return next;
     });
   }, []);
+
+  const expandObjectAncestorsForIssue = useCallback((issue: ValidationIssue | undefined) => {
+    if (!issue) return;
+    expandObjectAncestors(issue.path);
+  }, [expandObjectAncestors]);
+
+  const focusSummaryPointer = useCallback(
+    (pointer: string) => {
+      if (!pointer) return;
+      expandObjectAncestors(pointer);
+      focusPointerWithRetry(formRef.current, pointer);
+    },
+    [expandObjectAncestors],
+  );
 
   const handleSubmit = useCallback(
     (event: React.FormEvent) => {
@@ -569,6 +585,7 @@ export function SchematicForm<TData = unknown>({
     objectExpandedByPointer,
     rootSchema: jsonSchema,
     setObjectExpanded,
+    focusSummaryPointer,
   };
 
   return (
@@ -633,6 +650,7 @@ type RendererContext<TData> = {
   objectExpandedByPointer: ObjectExpansionState;
   rootSchema: JsonSchema;
   setObjectExpanded(pointer: string, expanded: boolean): void;
+  focusSummaryPointer(pointer: string): void;
 };
 
 function renderSchema<TData>(
@@ -778,7 +796,7 @@ function renderObjectFieldset<TData>(
       {collapsed != null && description ? (
         <div className="schematic-form__object-description">{description}</div>
       ) : null}
-      {collapsed === true && summary ? <CollapsedObjectSummary summary={summary} /> : null}
+      {collapsed === true && summary ? <CollapsedObjectSummary summary={summary} onNavigate={context.focusSummaryPointer} /> : null}
       {collapsed != null ? (
         <div className="schematic-form__object-content" hidden={collapsed}>
           {fieldGroup}
@@ -861,38 +879,77 @@ function ObjectCollapseToggle({
 
 const collapsedObjectSummaryLimit = 10;
 const collapsedObjectSummaryTextLimit = 20;
+const collapsedObjectSummaryTraversalDepthLimit = 128;
+const collapsedObjectSummaryTraversalNodeLimit = 2000;
+const chipNavigationViewportBottomOffset = 100;
 
 type CollapsedObjectSummary = {
-  items: Array<{label: string; value?: string; invalid?: boolean}>;
+  items: Array<{label: string; value?: string; invalid?: boolean; pointer?: string; explicitLabel?: boolean; navigable?: boolean}>;
   hasOverflow: boolean;
+  hasInvalidOverflow: boolean;
+  firstInvalidOverflowPointer?: string;
 };
 
-function CollapsedObjectSummary({summary}: {summary: CollapsedObjectSummary}) {
+type CollapsedObjectSummaryTraversalState = {
+  items: CollapsedObjectSummary["items"];
+  totalItems: number;
+  hasInvalidOverflow: boolean;
+  firstInvalidOverflowPointer?: string;
+  remainingNodes: number;
+  activeValues: WeakSet<object>;
+};
+
+function CollapsedObjectSummary({summary, onNavigate}: {summary: CollapsedObjectSummary; onNavigate(pointer: string): void}) {
   if (summary.items.length === 0 && !summary.hasOverflow) return null;
+  const overflowIsClickable = summary.hasInvalidOverflow && typeof summary.firstInvalidOverflowPointer === "string";
   return (
     <div className="schematic-form__object-summary" aria-label="Collapsed object values">
-      {summary.items.map((item, index) => (
-        <Chip
-          className="schematic-form__object-summary-chip"
-          color={item.invalid ? "danger" : "default"}
-          key={`${item.label}-${item.value ?? ""}-${index}`}
-          size="sm"
-          title={item.value == null ? item.label : `${item.label}: ${item.value}`}
-          variant={item.invalid ? "soft" : "primary"}
-        >
-          <ChipLabel>
-            {trimSummaryText(item.label)}
-            {item.value == null ? null : (
-              <>
-                {": "}
-                <strong>{trimSummaryText(item.value)}</strong>
-              </>
-            )}
-          </ChipLabel>
-        </Chip>
-      ))}
+      {summary.items.map((item, index) => {
+        const isClickable = item.explicitLabel && item.pointer && item.navigable !== false;
+        return (
+          <Chip
+            className={cx("schematic-form__object-summary-chip", isClickable ? "schematic-form__object-summary-chip--clickable" : undefined)}
+            color={item.invalid ? "danger" : "default"}
+            data-clickable={isClickable ? "true" : undefined}
+            key={`${item.label}-${item.value ?? ""}-${index}`}
+            size="sm"
+            tabIndex={isClickable ? 0 : undefined}
+            title={item.value == null ? item.label : `${item.label}: ${item.value}`}
+            variant={item.invalid ? "soft" : "primary"}
+            onClick={isClickable ? () => onNavigate(item.pointer as string) : undefined}
+            onKeyDown={isClickable ? (event: React.KeyboardEvent<HTMLElement>) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onNavigate(item.pointer as string);
+            } : undefined}
+          >
+            <ChipLabel>
+              {trimSummaryText(item.label)}
+              {item.value == null ? null : (
+                <>
+                  {": "}
+                  <strong>{trimSummaryText(item.value)}</strong>
+                </>
+              )}
+            </ChipLabel>
+          </Chip>
+        );
+      })}
       {summary.hasOverflow ? (
-        <Chip className="schematic-form__object-summary-chip" color="default" size="sm" variant="primary">
+        <Chip
+          className={cx("schematic-form__object-summary-chip", overflowIsClickable && "schematic-form__object-summary-chip--clickable")}
+          color={summary.hasInvalidOverflow ? "danger" : "default"}
+          data-clickable={overflowIsClickable ? "true" : undefined}
+          size="sm"
+          tabIndex={overflowIsClickable ? 0 : undefined}
+          variant={summary.hasInvalidOverflow ? "soft" : "primary"}
+          onClick={overflowIsClickable ? () => onNavigate(summary.firstInvalidOverflowPointer as string) : undefined}
+          onKeyDown={overflowIsClickable ? (event: React.KeyboardEvent<HTMLElement>) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onNavigate(summary.firstInvalidOverflowPointer as string);
+          } : undefined}
+        >
           ...
         </Chip>
       ) : null}
@@ -906,12 +963,38 @@ function getCollapsedObjectSummary<TData>(
   context: RendererContext<TData>,
   refStack: string[] = [],
 ): CollapsedObjectSummary {
-  const items: CollapsedObjectSummary["items"] = [];
-  collectCollapsedObjectSummaryItems(schema, path, getAtPath(context.data, path), false, context, refStack, items);
-  return {
-    items: items.slice(0, collapsedObjectSummaryLimit),
-    hasOverflow: items.length > collapsedObjectSummaryLimit,
+  const traversal: CollapsedObjectSummaryTraversalState = {
+    items: [],
+    totalItems: 0,
+    hasInvalidOverflow: false,
+    remainingNodes: collapsedObjectSummaryTraversalNodeLimit,
+    activeValues: new WeakSet<object>(),
   };
+  collectCollapsedObjectSummaryItems(schema, path, getAtPath(context.data, path), false, context, refStack, traversal);
+  return {
+    items: traversal.items,
+    hasOverflow: traversal.totalItems > collapsedObjectSummaryLimit,
+    hasInvalidOverflow: traversal.hasInvalidOverflow,
+    firstInvalidOverflowPointer: traversal.firstInvalidOverflowPointer,
+  };
+}
+
+function pushCollapsedSummaryItem(
+  item: {label: string; value?: string; invalid?: boolean; pointer?: string; explicitLabel?: boolean; navigable?: boolean},
+  state: CollapsedObjectSummaryTraversalState,
+) {
+  const index = state.totalItems;
+  state.totalItems += 1;
+  if (index < collapsedObjectSummaryLimit) {
+    state.items.push(item);
+    return;
+  }
+  if (item.invalid) {
+    state.hasInvalidOverflow = true;
+    if (!state.firstInvalidOverflowPointer && item.pointer && item.navigable !== false) {
+      state.firstInvalidOverflowPointer = item.pointer;
+    }
+  }
 }
 
 function collectCollapsedObjectSummaryItems<TData>(
@@ -921,12 +1004,19 @@ function collectCollapsedObjectSummaryItems<TData>(
   required: boolean,
   context: RendererContext<TData>,
   refStack: string[],
-  items: CollapsedObjectSummary["items"],
+  state: CollapsedObjectSummaryTraversalState,
+  depth = 0,
 ) {
-  if (items.length > collapsedObjectSummaryLimit) return;
+  if (depth > collapsedObjectSummaryTraversalDepthLimit) return;
+  if (state.remainingNodes <= 0) return;
+  if (state.totalItems > collapsedObjectSummaryLimit && state.hasInvalidOverflow) return;
+  state.remainingNodes -= 1;
 
   const resolved = resolveRenderSchema(schema, context, refStack);
   schema = resolved.schema;
+  const pointer = toPointer(path);
+  const explicitLabel = hasExplicitCollapsedSummaryLabel(schema);
+  const navigable = isCollapsedSummaryItemNavigable(schema, required, context.rootSchema, resolved.refStack);
 
   if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) return;
 
@@ -934,14 +1024,23 @@ function collectCollapsedObjectSummaryItems<TData>(
   if (branch) {
     const selected = getSelectedSummaryBranch(schema, path, branch.branches, context, resolved.refStack);
     if (selected) {
-      collectCollapsedObjectSummaryItems(selected, path, value, required, context, resolved.refStack, items);
+      collectCollapsedObjectSummaryItems(selected, path, value, required, context, resolved.refStack, state, depth + 1);
     } else {
       // Try to infer the branch from the actual value before marking as invalid.
       const inferredIndex = inferBranchIndexFromValue(value, branch.branches, context.rootSchema, resolved.refStack);
       if (inferredIndex != null) {
-        collectCollapsedObjectSummaryItems(branch.branches[inferredIndex], path, value, required, context, resolved.refStack, items);
+        collectCollapsedObjectSummaryItems(
+          branch.branches[inferredIndex],
+          path,
+          value,
+          required,
+          context,
+          resolved.refStack,
+          state,
+          depth + 1,
+        );
       } else if (required) {
-        items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+        pushCollapsedSummaryItem({label: getCollapsedSummaryLabel(schema, path), invalid: true, pointer, explicitLabel, navigable}, state);
       }
     }
     return;
@@ -951,30 +1050,65 @@ function collectCollapsedObjectSummaryItems<TData>(
 
   if (type === "object") {
     if (!isRecord(value)) {
-      if (required) items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+      if (required) pushCollapsedSummaryItem({label: getCollapsedSummaryLabel(schema, path), invalid: true, pointer, explicitLabel, navigable}, state);
       return;
     }
+    if (state.activeValues.has(value)) return;
+    state.activeValues.add(value);
     const requiredKeys = new Set(schema.required ?? []);
-    for (const key of getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
-      if (items.length > collapsedObjectSummaryLimit) return;
-      const child = schema.properties?.[key];
-      if (!child) continue;
-      collectCollapsedObjectSummaryItems(child, [...path, key], value[key], requiredKeys.has(key), context, resolved.refStack, items);
+    try {
+      for (const key of getOrderedPropertyKeys(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack})) {
+        if (state.totalItems > collapsedObjectSummaryLimit && state.hasInvalidOverflow) return;
+        if (state.remainingNodes <= 0) return;
+        const child = schema.properties?.[key];
+        if (!child) continue;
+        collectCollapsedObjectSummaryItems(
+          child,
+          [...path, key],
+          value[key],
+          requiredKeys.has(key),
+          context,
+          resolved.refStack,
+          state,
+          depth + 1,
+        );
+      }
+    } finally {
+      state.activeValues.delete(value);
     }
     return;
   }
 
   if (type === "array") {
     if (!Array.isArray(value) || value.length === 0) {
-      if (required) items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+      if (required) pushCollapsedSummaryItem({label: getCollapsedSummaryLabel(schema, path), invalid: true, pointer, explicitLabel, navigable}, state);
       return;
     }
+    if (state.activeValues.has(value)) return;
+    state.activeValues.add(value);
     const itemSchema = getSingleArrayItemSchema(schema, context.rootSchema, resolved.refStack);
-    if (!itemSchema) return;
-    value.forEach((item, index) => {
-      if (items.length > collapsedObjectSummaryLimit) return;
-      collectCollapsedObjectSummaryItems(withIndexedArrayItemTitle(itemSchema, index), [...path, index], item, true, context, resolved.refStack, items);
-    });
+    if (!itemSchema) {
+      state.activeValues.delete(value);
+      return;
+    }
+    try {
+      value.forEach((item, index) => {
+        if (state.totalItems > collapsedObjectSummaryLimit && state.hasInvalidOverflow) return;
+        if (state.remainingNodes <= 0) return;
+        collectCollapsedObjectSummaryItems(
+          withIndexedArrayItemTitle(itemSchema, index),
+          [...path, index],
+          item,
+          true,
+          context,
+          resolved.refStack,
+          state,
+          depth + 1,
+        );
+      });
+    } finally {
+      state.activeValues.delete(value);
+    }
     return;
   }
 
@@ -982,20 +1116,36 @@ function collectCollapsedObjectSummaryItems<TData>(
   const hasValue = hasCollapsedSummaryValue(value);
   const invalid = issues.length > 0 || (required && !hasValue);
   if (invalid && (required || hasValue)) {
-    items.push({
+    pushCollapsedSummaryItem({
       label: getCollapsedSummaryLabel(schema, path),
       value: hasValue ? formatCollapsedSummaryValue(value) : undefined,
       invalid: true,
-    });
+      pointer,
+      explicitLabel,
+      navigable,
+    }, state);
     return;
   }
 
   if (!hasValue) return;
 
-  items.push({
+  pushCollapsedSummaryItem({
     label: getCollapsedSummaryLabel(schema, path),
     value: formatCollapsedSummaryValue(value),
-  });
+    pointer,
+    explicitLabel,
+    navigable,
+  }, state);
+}
+
+function isCollapsedSummaryItemNavigable(
+  schema: JsonSchema,
+  required: boolean,
+  rootSchema: JsonSchema,
+  refStack: string[],
+): boolean {
+  if (!required) return true;
+  return !isSingleEnumSchema(schema, rootSchema, refStack);
 }
 
 function getSelectedSummaryBranch<TData>(
@@ -1037,6 +1187,10 @@ function getCollapsedSummaryLabel(schema: JsonSchema, path: PathSegment[]): stri
     if (typeof segment === "string" && segment.trim()) return segment;
   }
   return getLabel(schema, path, "Item");
+}
+
+function hasExplicitCollapsedSummaryLabel(schema: JsonSchema): boolean {
+  return typeof schema.title === "string" && schema.title.trim().length > 0;
 }
 
 function trimSummaryText(value: string): string {
@@ -2464,7 +2618,13 @@ function applyBranchSelections(
   path: PathSegment[] = [],
   rootSchema: JsonSchema = schema,
   refStack: string[] = [],
+  traversal: BranchSelectionTraversalState = {remainingNodes: branchSelectionTraversalNodeLimit},
+  depth = 0,
 ): JsonSchema {
+  if (depth > branchSelectionTraversalDepthLimit) return schema;
+  if (traversal.remainingNodes <= 0) return schema;
+  traversal.remainingNodes -= 1;
+
   const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
   schema = resolved.schema;
 
@@ -2475,7 +2635,7 @@ function applyBranchSelections(
       ? selections[pointer] ?? undefined
       : getDefaultBranchIndex(schema, branch.branches, {rootSchema, refStack: branch.refStack});
     const selected = selectedIndex == null ? undefined : branch.branches[selectedIndex];
-    if (selected) return applyBranchSelections(selected, selections, path, rootSchema);
+    if (selected) return applyBranchSelections(selected, selections, path, rootSchema, branch.refStack, traversal, depth + 1);
     return schema;
   }
 
@@ -2485,7 +2645,7 @@ function applyBranchSelections(
     output.properties = Object.fromEntries(
       Object.entries(schema.properties).map(([key, child]) => [
         key,
-        applyBranchSelections(child, selections, [...path, key], rootSchema, resolved.refStack),
+        applyBranchSelections(child, selections, [...path, key], rootSchema, resolved.refStack, traversal, depth + 1),
       ]),
     );
   }
@@ -2493,27 +2653,27 @@ function applyBranchSelections(
   if (schema.items) {
     if (Array.isArray(schema.items)) {
       output.items = schema.items.map((child, index) =>
-        applyBranchSelections(child, selections, [...path, index], rootSchema, resolved.refStack),
+        applyBranchSelections(child, selections, [...path, index], rootSchema, resolved.refStack, traversal, depth + 1),
       );
     } else {
       const selectedArrayItemCount = getSelectedArrayItemCount(selections, path);
       if (selectedArrayItemCount > 0) {
         output.items = Array.from({length: selectedArrayItemCount}, (_, index) =>
-          applyBranchSelections(schema.items as JsonSchema, selections, [...path, index], rootSchema),
+          applyBranchSelections(schema.items as JsonSchema, selections, [...path, index], rootSchema, resolved.refStack, traversal, depth + 1),
         );
         output.additionalItems = applyAdditionalArrayItemSchema(schema, selections, path, selectedArrayItemCount, rootSchema);
       } else {
-        output.items = applyBranchSelections(schema.items, selections, [...path, 0], rootSchema);
+        output.items = applyBranchSelections(schema.items, selections, [...path, 0], rootSchema, resolved.refStack, traversal, depth + 1);
       }
     }
   }
 
   if (Array.isArray(schema.oneOf)) {
-    output.oneOf = schema.oneOf.map((child) => applyBranchSelections(child, selections, path, rootSchema));
+    output.oneOf = schema.oneOf.map((child) => applyBranchSelections(child, selections, path, rootSchema, resolved.refStack, traversal, depth + 1));
   }
 
   if (Array.isArray(schema.anyOf)) {
-    output.anyOf = schema.anyOf.map((child) => applyBranchSelections(child, selections, path, rootSchema));
+    output.anyOf = schema.anyOf.map((child) => applyBranchSelections(child, selections, path, rootSchema, resolved.refStack, traversal, depth + 1));
   }
 
   return output;
@@ -2561,7 +2721,7 @@ function focusFirstIssue(form: HTMLFormElement | null, issues: ValidationIssue[]
     const target = container.matches("input, textarea, button, select, [tabindex]")
       ? container
       : container.querySelector<HTMLElement>("input, textarea, button, select, [tabindex]");
-    target?.focus();
+    if (target) focusElementForNavigation(target);
     return;
   }
 }
@@ -2577,10 +2737,75 @@ function focusFirstNestedField(form: HTMLFormElement | null, pointer: string) {
     const target = getFocusableTarget(container);
     if (!target) continue;
 
-    target.focus();
-    target.click();
+    focusElementForNavigation(target);
     return;
   }
+}
+
+function focusFieldByPointer(form: HTMLFormElement | null, pointer: string): boolean {
+  if (!form) return false;
+  for (const container of form.querySelectorAll<HTMLElement>("[data-sf-path]")) {
+    if (container.dataset.sfPath !== pointer) continue;
+    const target = getFocusableTarget(container);
+    if (!target) return false;
+    focusElementForNavigation(target);
+    return document.activeElement === target;
+  }
+  return false;
+}
+
+function focusElementForNavigation(target: HTMLElement) {
+  const focusTarget = target as HTMLElement & {focus(options?: FocusOptions & {focusVisible?: boolean}): void};
+
+  try {
+    const rect = target.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    const desiredBottom = Math.max(0, viewportHeight - chipNavigationViewportBottomOffset);
+    let deltaY = 0;
+
+    if (rect.bottom > desiredBottom) {
+      deltaY = rect.bottom - desiredBottom;
+    } else if (rect.top < 0) {
+      deltaY = rect.top;
+    }
+
+    if (Math.abs(deltaY) >= 1 && typeof window.scrollBy === "function") {
+      window.scrollBy({top: deltaY, behavior: "smooth"});
+    }
+  } catch {
+    // Ignore non-layout environments where viewport metrics are unavailable.
+  }
+
+  try {
+    focusTarget.focus({focusVisible: true});
+  } catch {
+    target.focus();
+  }
+
+  if (document.activeElement !== target) return;
+  if (target.getAttribute("role") !== "switch") return;
+
+  const switchRoot = target.closest<HTMLElement>(".switch") ?? (target.classList.contains("switch") ? target : null);
+  if (!switchRoot) return;
+
+  switchRoot.setAttribute("data-sf-force-focus-visible", "true");
+  const clearForcedFocusVisible = () => {
+    switchRoot.removeAttribute("data-sf-force-focus-visible");
+    target.removeEventListener("blur", clearForcedFocusVisible);
+    target.removeEventListener("focusout", clearForcedFocusVisible);
+  };
+  target.addEventListener("blur", clearForcedFocusVisible, {once: true});
+  target.addEventListener("focusout", clearForcedFocusVisible, {once: true});
+}
+
+function focusPointerWithRetry(form: HTMLFormElement | null, pointer: string, attempt = 0) {
+  if (!form || !pointer) return;
+  if (focusFieldByPointer(form, pointer)) return;
+  if (attempt >= 5) {
+    focusFirstNestedField(form, pointer);
+    return;
+  }
+  window.setTimeout(() => focusPointerWithRetry(form, pointer, attempt + 1), 16);
 }
 
 function getPointerAncestors(pointer: string): string[] {
@@ -2591,15 +2816,20 @@ function getPointerAncestors(pointer: string): string[] {
 
 function getFocusableTarget(container: HTMLElement): HTMLElement | null {
   if (isFocusable(container)) return container;
-  return container.querySelector<HTMLElement>(
-    [
-      "input:not([type='hidden']):not([disabled])",
-      "textarea:not([disabled])",
-      "button:not([disabled])",
-      "select:not([disabled])",
-      "[tabindex]:not([tabindex='-1'])",
-    ].join(", "),
-  );
+  const prioritySelectors = [
+    "[role='switch']:not([disabled]):not([tabindex='-1'])",
+    "input:not([type='hidden']):not([disabled]):not([tabindex='-1'])",
+    "select:not([disabled]):not([tabindex='-1'])",
+    "textarea:not([disabled]):not([tabindex='-1'])",
+    "[role='radio']:not([disabled]):not([tabindex='-1'])",
+    "button:not([disabled]):not([tabindex='-1'])",
+    "[tabindex]:not([tabindex='-1'])",
+  ];
+  for (const selector of prioritySelectors) {
+    const target = container.querySelector<HTMLElement>(selector);
+    if (target) return target;
+  }
+  return null;
 }
 
 function isFocusable(element: HTMLElement) {

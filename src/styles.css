@@ -76,6 +76,10 @@
   @apply max-w-full;
 }
 
+.schematic-form__object-summary-chip--clickable {
+  @apply cursor-pointer;
+}
+
 .schematic-form__object-summary-chip .chip__label {
   @apply min-w-0 truncate;
 }
@@ -156,6 +160,10 @@
 
 .schematic-form__switch-row {
   @apply gap-2;
+}
+
+.schematic-form .switch[data-sf-force-focus-visible="true"] .switch__control {
+  @apply status-focused;
 }
 
 .schematic-form__error-summary {

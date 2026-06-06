@@ -149,14 +149,14 @@ After implementation, update `docs/ARCHITECTURE.md` collapsed-summary behavior s
 
 ## Deliverables
 
-- [ ] Implement internal summary model update.
-- [ ] Implement collector logic that correctly computes hidden invalid overflow.
-- [ ] Add explicit bounded-traversal safeguards for recursive/deep data cases.
-- [ ] Implement overflow chip style mapping.
-- [ ] Add/adjust unit tests in `src/SchematicForm.collapse.test.tsx`.
-- [ ] Update `docs/ARCHITECTURE.md` summary behavior note.
-- [ ] Run `npm test`.
-- [ ] Run `npm run lint`.
+- [x] Implement internal summary model update.
+- [x] Implement collector logic that correctly computes hidden invalid overflow.
+- [x] Add explicit bounded-traversal safeguards for recursive/deep data cases.
+- [x] Implement overflow chip style mapping.
+- [x] Add/adjust unit tests in `src/SchematicForm.collapse.test.tsx`.
+- [x] Update `docs/ARCHITECTURE.md` summary behavior note.
+- [x] Run `npm test`.
+- [x] Run `npm run lint`.
 
 ## Success Criteria
 
@@ -166,3 +166,26 @@ After implementation, update `docs/ARCHITECTURE.md` collapsed-summary behavior s
 4. New and existing unit tests pass.
 5. Recursive `$ref` schemas are handled with finite traversal and no hangs.
 6. Architecture docs reflect the updated overflow behavior and recursion-bounding rule.
+
+## Implementation Remarks (2026-06-07)
+
+Implemented in `src/SchematicForm.tsx`, `src/SchematicForm.collapse.test.tsx`, and `docs/ARCHITECTURE.md`.
+
+Delivered behavior from this plan:
+- Overflow `...` chip now turns danger soft only when hidden summary items include invalid fields.
+- Overflow `...` chip stays neutral when hidden summary items are valid.
+- Hidden invalid overflow navigation targets the first hidden invalid field.
+- Summary traversal is bounded by depth and node budget and guarded against recursive runtime cycles.
+
+Related follow-up behavior implemented in the same workstream:
+- Explicit-label summary chips are actionable and navigate to the exact field.
+- Hidden required single-value enum chips remain in summary but are not actionable because no input is rendered.
+- Chip navigation is focus-only (no synthetic control activation), expands collapsed ancestors, retries after expansion, and targets exact controls (including switch roles).
+- Pointer-triggered switch navigation now applies visible focus treatment consistently.
+- Chip navigation scrolls smoothly and positions targets at least 100px above viewport bottom when possible.
+
+Verification status:
+- `npm test -- src/SchematicForm.collapse.test.tsx`: passed.
+- `npm test`: passed.
+- `npm run lint`: passed.
+- `npm run test:acceptance`: currently fails due pre-existing strict locator ambiguities in Playwright tests, unrelated to summary-chip logic.
