@@ -1127,14 +1127,14 @@ describe("SchematicForm", () => {
     await user.click(screen.getByRole("button", {name: /add property/i}));
 
     const item = getSurface(container, "/properties/0");
-    expect(within(item).getByRole("button", {name: /select an option type validation/i})).toBeInTheDocument();
+    expect(within(item).getByRole("button", {name: /select an option property annotation/i})).toBeInTheDocument();
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
 
     await waitFor(() => {
       expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
-      expect(within(item).getByText(/must have required property 'typeValidation'/i)).toBeInTheDocument();
+      expect(within(item).getByText(/must have required property 'propertyAnnotation'/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
   });
@@ -1156,7 +1156,7 @@ describe("SchematicForm", () => {
     );
   });
 
-  test("selecting a type validation branch for an added local ref item does not toggle its required switch", async () => {
+  test("selecting a property annotation branch for an added local ref item does not toggle its required switch", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
@@ -1165,14 +1165,14 @@ describe("SchematicForm", () => {
     const item = getSurface(container, "/properties/0");
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
 
-    await user.click(within(item).getByRole("button", {name: /select an option type validation/i}));
+    await user.click(within(item).getByRole("button", {name: /select an option property annotation/i}));
     await user.click(await screen.findByRole("option", {name: "String Validation"}));
 
     expect(within(item).getByLabelText("Default")).toBeInTheDocument();
     await waitFor(() => {
-      const latestData = onStateChange.mock.calls.at(-1)?.[0].data as {properties?: Array<{typeValidation?: {type?: string}}>};
+      const latestData = onStateChange.mock.calls.at(-1)?.[0].data as {properties?: Array<{propertyAnnotation?: {type?: string}}>};
       expect(latestData.properties?.[0]).toMatchObject({
-        typeValidation: {type: "string"},
+        propertyAnnotation: {type: "string"},
       });
     });
     expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();

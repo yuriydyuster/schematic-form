@@ -417,6 +417,337 @@ export const primitiveSchema = {
   },
 } satisfies JsonSchema;
 
+const propertyKeyAnnotationSchema: JsonSchema = {
+  "type": ["string"],
+  "title": "Key",
+  "description": "Unique property key.",
+  "minLength": 1
+};
+
+const propertyRequiredAnnotationSchema: JsonSchema = {
+  "type": ["boolean"],
+  "title": "Required",
+  "description": "Whether this property is required."
+};
+
+const propertyTitleAnnotationSchema: JsonSchema = {
+  "type": ["string"],
+  "title": "Title",
+  "description": "Human-readable property title.",
+  "minLength": 1
+};
+
+const propertyDescriptionAnnotationSchema: JsonSchema = {
+  "type": ["string"],
+  "title": "Description",
+  "description": "Human-readable property description.",
+  "minLength": 1
+};
+
+const propertyAnnotationSchema: JsonSchema = {
+  "type": ["object"],
+  "title": "Property Annotation",
+  "description": "Type-specific validation attributes and schema annotations for this property.",
+  "properties": {},
+  "oneOf": [
+    {
+      "title": "String Validation",
+      "description": "Validation attributes for a string property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["string"]
+        },
+        "default": {
+          "type": ["string"],
+          "title": "Default",
+          "description": "Default string value."
+        },
+        "minLength": {
+          "type": ["integer"],
+          "title": "Minimum Length",
+          "description": "Minimum allowed string length.",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": ["integer"],
+          "title": "Maximum Length",
+          "description": "Maximum allowed string length.",
+          "minimum": 0
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed string values.",
+          "items": {
+            "type": ["string"],
+            "title": "Enum Value",
+            "description": "Single allowed string value."
+          }
+        },
+        "format": {
+          "type": ["string"],
+          "title": "Format",
+          "description": "String format hint, such as email, uri, date, or date-time."
+        },
+        "pattern": {
+          "type": ["string"],
+          "title": "Pattern",
+          "description": "Regular expression pattern for validating the string."
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Number Validation",
+      "description": "Validation attributes for a number property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["number"]
+        },
+        "default": {
+          "type": ["number"],
+          "title": "Default",
+          "description": "Default number value."
+        },
+        "minimum": {
+          "type": ["number"],
+          "title": "Minimum",
+          "description": "Minimum allowed number."
+        },
+        "maximum": {
+          "type": ["number"],
+          "title": "Maximum",
+          "description": "Maximum allowed number."
+        },
+        "multipleOf": {
+          "type": ["number"],
+          "title": "Multiple Of",
+          "description": "The number must be a multiple of this value.",
+          "minimum": 0
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed number values.",
+          "items": {
+            "type": ["number"],
+            "title": "Enum Value",
+            "description": "Single allowed number value."
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Integer Validation",
+      "description": "Validation attributes for an integer property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["integer"]
+        },
+        "default": {
+          "type": ["integer"],
+          "title": "Default",
+          "description": "Default integer value."
+        },
+        "minimum": {
+          "type": ["integer"],
+          "title": "Minimum",
+          "description": "Minimum allowed integer."
+        },
+        "maximum": {
+          "type": ["integer"],
+          "title": "Maximum",
+          "description": "Maximum allowed integer."
+        },
+        "multipleOf": {
+          "type": ["integer"],
+          "title": "Multiple Of",
+          "description": "The integer must be a multiple of this value.",
+          "minimum": 1
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed integer values.",
+          "items": {
+            "type": ["integer"],
+            "title": "Enum Value",
+            "description": "Single allowed integer value."
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Boolean Validation",
+      "description": "Validation attributes for a boolean property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["boolean"]
+        },
+        "default": {
+          "type": ["boolean"],
+          "title": "Default",
+          "description": "Default boolean value."
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed boolean values.",
+          "items": {
+            "type": ["boolean"],
+            "title": "Enum Value",
+            "description": "Single allowed boolean value."
+          }
+        }
+      },
+      "required": ["type", "default"]
+    },
+    {
+      "title": "Null Validation",
+      "description": "Validation attributes for a null field.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Field value type.",
+          "enum": ["null"]
+        },
+        "default": {
+          "type": ["null"],
+          "title": "Default",
+          "description": "Default null value."
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed null values.",
+          "items": {
+            "type": ["null"],
+            "title": "Enum Value",
+            "description": "Single allowed null value."
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Array Validation",
+      "description": "Validation attributes for an array property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["array"]
+        },
+        "items": {
+          "$ref": "#/$defs/property",
+          "title": "Items",
+          "description": "Recursive property definition for array items."
+        },
+        "minItems": {
+          "type": ["integer"],
+          "title": "Minimum Items",
+          "description": "Minimum number of array items.",
+          "minimum": 0
+        },
+        "maxItems": {
+          "type": ["integer"],
+          "title": "Maximum Items",
+          "description": "Maximum number of array items.",
+          "minimum": 0
+        },
+        "uniqueItems": {
+          "type": ["boolean"],
+          "title": "Unique Items",
+          "description": "Whether array items must be unique."
+        }
+      },
+      "required": ["type", "items"]
+    },
+    {
+      "title": "Object Validation",
+      "description": "Validation attributes for an object property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["object"]
+        },
+        "default": {
+          "type": ["object"],
+          "title": "Default",
+          "description": "Default object value.",
+          "properties": {}
+        },
+        "properties": {
+          "type": ["array"],
+          "title": "Properties",
+          "description": "Recursive child property definitions.",
+          "items": {
+            "$ref": "#/$defs/property",
+            "title": "Property",
+            "description": "Recursive property definition for an object property.",
+            "type": ["object"],
+            "properties": {
+              "key": propertyKeyAnnotationSchema,
+              "required": propertyRequiredAnnotationSchema,
+              "propertyAnnotation": {
+                "$ref": "#/$defs/property/properties/propertyAnnotation"
+              }
+            },
+            "required": ["key", "required", "propertyAnnotation"],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": {
+          "type": ["boolean"],
+          "title": "Additional Properties",
+          "description": "Whether additional object properties are allowed."
+        }
+      },
+      "required": ["type", "properties"]
+    }
+  ],
+  "unevaluatedProperties": false
+};
+
 export const kitchenSinkSchema = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Form Meta Schema",
@@ -431,7 +762,15 @@ export const kitchenSinkSchema = {
       "items": {
         "$ref": "#/$defs/property",
         "title": "Property",
-        "description": "A single recursive property definition."
+        "description": "A single recursive property definition.",
+        "type": ["object"],
+        "properties": {
+          "key": propertyKeyAnnotationSchema,
+          "required": propertyRequiredAnnotationSchema,
+          "propertyAnnotation": propertyAnnotationSchema
+        },
+        "required": ["key", "required", "propertyAnnotation"],
+        "additionalProperties": false
       }
     }
   },
@@ -443,311 +782,9 @@ export const kitchenSinkSchema = {
       "description": "A recursive property definition. Common property metadata is defined directly; type-specific validation attributes are defined under validation.",
       "type": ["object"],
       "properties": {
-        "key": {
-          "type": ["string"],
-          "title": "Key",
-          "description": "Unique property key.",
-          "minLength": 1
-        },
-        "title": {
-          "type": ["string"],
-          "title": "Title",
-          "description": "Human-readable property title.",
-          "minLength": 1
-        },
-        "description": {
-          "type": ["string"],
-          "title": "Description",
-          "description": "Human-readable property description.",
-          "minLength": 1
-        },
-        "required": {
-          "type": ["boolean"],
-          "title": "Required",
-          "description": "Whether this property is required."
-        },
-        "typeValidation": {
-          "type": ["object"],
-          "title": "Type Validation",
-          "description": "Type-specific validation attributes for this property.",
-          "properties": {},
-          "oneOf": [
-            {
-              "title": "String Validation",
-              "description": "Validation attributes for a string property.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Property value type.",
-                  "enum": ["string"]
-                },
-                "default": {
-                  "type": ["string"],
-                  "title": "Default",
-                  "description": "Default string value."
-                },
-                "minLength": {
-                  "type": ["integer"],
-                  "title": "Minimum Length",
-                  "description": "Minimum allowed string length.",
-                  "minimum": 0
-                },
-                "maxLength": {
-                  "type": ["integer"],
-                  "title": "Maximum Length",
-                  "description": "Maximum allowed string length.",
-                  "minimum": 0
-                },
-                "enum": {
-                  "type": ["array"],
-                  "title": "Enum",
-                  "description": "Allowed string values.",
-                  "items": {
-                    "type": ["string"],
-                    "title": "Enum Value",
-                    "description": "Single allowed string value."
-                  }
-                },
-                "format": {
-                  "type": ["string"],
-                  "title": "Format",
-                  "description": "String format hint, such as email, uri, date, or date-time."
-                },
-                "pattern": {
-                  "type": ["string"],
-                  "title": "Pattern",
-                  "description": "Regular expression pattern for validating the string."
-                }
-              },
-              "required": ["type"]
-            },
-            {
-              "title": "Number Validation",
-              "description": "Validation attributes for a number property.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Property value type.",
-                  "enum": ["number"]
-                },
-                "default": {
-                  "type": ["number"],
-                  "title": "Default",
-                  "description": "Default number value."
-                },
-                "minimum": {
-                  "type": ["number"],
-                  "title": "Minimum",
-                  "description": "Minimum allowed number."
-                },
-                "maximum": {
-                  "type": ["number"],
-                  "title": "Maximum",
-                  "description": "Maximum allowed number."
-                },
-                "multipleOf": {
-                  "type": ["number"],
-                  "title": "Multiple Of",
-                  "description": "The number must be a multiple of this value.",
-                  "minimum": 0
-                },
-                "enum": {
-                  "type": ["array"],
-                  "title": "Enum",
-                  "description": "Allowed number values.",
-                  "items": {
-                    "type": ["number"],
-                    "title": "Enum Value",
-                    "description": "Single allowed number value."
-                  }
-                }
-              },
-              "required": ["type"]
-            },
-            {
-              "title": "Integer Validation",
-              "description": "Validation attributes for an integer property.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Property value type.",
-                  "enum": ["integer"]
-                },
-                "default": {
-                  "type": ["integer"],
-                  "title": "Default",
-                  "description": "Default integer value."
-                },
-                "minimum": {
-                  "type": ["integer"],
-                  "title": "Minimum",
-                  "description": "Minimum allowed integer."
-                },
-                "maximum": {
-                  "type": ["integer"],
-                  "title": "Maximum",
-                  "description": "Maximum allowed integer."
-                },
-                "multipleOf": {
-                  "type": ["integer"],
-                  "title": "Multiple Of",
-                  "description": "The integer must be a multiple of this value.",
-                  "minimum": 1
-                },
-                "enum": {
-                  "type": ["array"],
-                  "title": "Enum",
-                  "description": "Allowed integer values.",
-                  "items": {
-                    "type": ["integer"],
-                    "title": "Enum Value",
-                    "description": "Single allowed integer value."
-                  }
-                }
-              },
-              "required": ["type"]
-            },
-            {
-              "title": "Boolean Validation",
-              "description": "Validation attributes for a boolean property.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Property value type.",
-                  "enum": ["boolean"]
-                },
-                "default": {
-                  "type": ["boolean"],
-                  "title": "Default",
-                  "description": "Default boolean value."
-                },
-                "enum": {
-                  "type": ["array"],
-                  "title": "Enum",
-                  "description": "Allowed boolean values.",
-                  "items": {
-                    "type": ["boolean"],
-                    "title": "Enum Value",
-                    "description": "Single allowed boolean value."
-                  }
-                }
-              },
-              "required": ["type", "default"]
-            },
-            {
-              "title": "Null Validation",
-              "description": "Validation attributes for a null field.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Field value type.",
-                  "enum": ["null"]
-                },
-                "default": {
-                  "type": ["null"],
-                  "title": "Default",
-                  "description": "Default null value."
-                },
-                "enum": {
-                  "type": ["array"],
-                  "title": "Enum",
-                  "description": "Allowed null values.",
-                  "items": {
-                    "type": ["null"],
-                    "title": "Enum Value",
-                    "description": "Single allowed null value."
-                  }
-                }
-              },
-              "required": ["type"]
-            },
-            {
-              "title": "Array Validation",
-              "description": "Validation attributes for an array property.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Property value type.",
-                  "enum": ["array"]
-                },
-                "items": {
-                  "$ref": "#/$defs/property",
-                  "title": "Items",
-                  "description": "Recursive property definition for array items."
-                },
-                "minItems": {
-                  "type": ["integer"],
-                  "title": "Minimum Items",
-                  "description": "Minimum number of array items.",
-                  "minimum": 0
-                },
-                "maxItems": {
-                  "type": ["integer"],
-                  "title": "Maximum Items",
-                  "description": "Maximum number of array items.",
-                  "minimum": 0
-                },
-                "uniqueItems": {
-                  "type": ["boolean"],
-                  "title": "Unique Items",
-                  "description": "Whether array items must be unique."
-                }
-              },
-              "required": ["type", "items"]
-            },
-            {
-              "title": "Object Validation",
-              "description": "Validation attributes for an object property.",
-              "type": ["object"],
-              "properties": {
-                "type": {
-                  "type": ["string"],
-                  "title": "Type",
-                  "description": "Property value type.",
-                  "enum": ["object"]
-                },
-                "default": {
-                  "type": ["object"],
-                  "title": "Default",
-                  "description": "Default object value.",
-                  "properties": {}
-                },
-                "properties": {
-                  "type": ["array"],
-                  "title": "Properties",
-                  "description": "Recursive child property definitions.",
-                  "items": {
-                    "$ref": "#/$defs/property",
-                    "title": "Property",
-                    "description": "Recursive property definition for an object property."
-                  }
-                },
-                "additionalProperties": {
-                  "type": ["boolean"],
-                  "title": "Additional Properties",
-                  "description": "Whether additional object properties are allowed."
-                }
-              },
-              "required": ["type", "properties"]
-            }
-          ],
-          "unevaluatedProperties": false
-        }
+        "propertyAnnotation": propertyAnnotationSchema
       },
-      "required": ["key", "required", "typeValidation"],
-      "additionalProperties": false
+      "required": ["propertyAnnotation"]
     }
   }
 } satisfies JsonSchema;

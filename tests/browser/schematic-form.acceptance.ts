@@ -34,9 +34,9 @@ async function addField(page: Page, index: number) {
 }
 
 async function selectValidation(page: Page, row: Locator, validationName: string) {
-  await row.getByRole("button", {name: /validation/i}).first().click();
+  await row.getByRole("button", {name: /property annotation/i}).first().click();
   await page.getByRole("option", {name: validationName}).click();
-  await expect(row.getByRole("button", {name: new RegExp(`${validationName} type validation`, "i")})).toBeVisible();
+  await expect(row.getByRole("button", {name: new RegExp(`${validationName} property annotation`, "i")})).toBeVisible();
 }
 
 test("loads the demo without browser runtime errors", async ({page}) => {
