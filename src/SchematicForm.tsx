@@ -261,10 +261,16 @@ export function SchematicForm<TData = unknown>({
   const [draftHydrated, setDraftHydrated] = useState(!shouldPersistDraft);
   const data = (isControlled ? value : internalData) as unknown;
   const inferredBranchMetadata = useMemo(() => inferBranchMetadata(jsonSchema, data, jsonSchema), [data, jsonSchema]);
-  const effectiveBranchSelection = useMemo(
-    () => ({...inferredBranchMetadata.branchSelection, ...branchSelection}),
-    [branchSelection, inferredBranchMetadata.branchSelection],
-  );
+  const effectiveBranchSelection = useMemo(() => {
+    // Merge inferred selections with user-provided selections, but do not let explicit null
+    // entries in `branchSelection` override inferred metadata. Treat `null` as "no override".
+    const merged: BranchSelectionState = {...inferredBranchMetadata.branchSelection};
+    for (const [pointer, index] of Object.entries(branchSelection)) {
+      if (index == null) continue;
+      merged[pointer] = index;
+    }
+    return merged;
+  }, [branchSelection, inferredBranchMetadata.branchSelection]);
   const validationSchema = useMemo(
     () => applyBranchSelections(jsonSchema, effectiveBranchSelection, [], jsonSchema),
     [effectiveBranchSelection, jsonSchema],
@@ -927,9 +933,16 @@ function collectCollapsedObjectSummaryItems<TData>(
   const branch = getBranchSchemas(schema, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   if (branch) {
     const selected = getSelectedSummaryBranch(schema, path, branch.branches, context, resolved.refStack);
-    if (selected) collectCollapsedObjectSummaryItems(selected, path, value, required, context, resolved.refStack, items);
-    else if (required) {
-      items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+    if (selected) {
+      collectCollapsedObjectSummaryItems(selected, path, value, required, context, resolved.refStack, items);
+    } else {
+      // Try to infer the branch from the actual value before marking as invalid.
+      const inferredIndex = inferBranchIndexFromValue(value, branch.branches, context.rootSchema, resolved.refStack);
+      if (inferredIndex != null) {
+        collectCollapsedObjectSummaryItems(branch.branches[inferredIndex], path, value, required, context, resolved.refStack, items);
+      } else if (required) {
+        items.push({label: getCollapsedSummaryLabel(schema, path), invalid: true});
+      }
     }
     return;
   }
@@ -993,10 +1006,17 @@ function getSelectedSummaryBranch<TData>(
   refStack: string[],
 ): JsonSchema | undefined {
   const pointer = toPointer(path);
-  const selectedIndex = Object.prototype.hasOwnProperty.call(context.branchSelection, pointer)
-    ? context.branchSelection[pointer] ?? undefined
-    : getDefaultBranchIndex(schema, branches, {rootSchema: context.rootSchema, refStack});
-  return selectedIndex == null ? undefined : branches[selectedIndex];
+  const hasExplicit = Object.prototype.hasOwnProperty.call(context.branchSelection, pointer);
+  const explicitValue = hasExplicit ? context.branchSelection[pointer] : undefined;
+
+  // If there's an explicit numeric selection, use it when valid.
+  if (hasExplicit && explicitValue != null && typeof explicitValue === "number" && explicitValue >= 0 && explicitValue < branches.length) {
+    return branches[explicitValue];
+  }
+
+  // Otherwise fall back to the schema's default branch index (covers explicit null or no explicit selection).
+  const defaultIndex = getDefaultBranchIndex(schema, branches, {rootSchema: context.rootSchema, refStack});
+  return defaultIndex == null ? undefined : branches[defaultIndex];
 }
 
 function hasCollapsedSummaryValue(value: unknown): value is JsonPrimitive {
@@ -2092,7 +2112,7 @@ function inferBranchMetadataInto(
     for (const key of getOrderedPropertyKeys(schema, {rootSchema, refStack: resolved.refStack})) {
       const child = schema.properties?.[key];
       if (!child || isDisplayOnlySchema(child, {rootSchema, refStack: resolved.refStack})) continue;
-      inferBranchMetadataInto(child, data[key], rootSchema, [...path, key], [], branchSelection);
+      inferBranchMetadataInto(child, data[key], rootSchema, [...path, key], resolved.refStack, branchSelection);
     }
     return;
   }
@@ -2103,7 +2123,7 @@ function inferBranchMetadataInto(
         ? schema.items[index]
         : getSingleArrayItemSchema(schema, rootSchema, resolved.refStack);
       if (!itemSchema) return;
-      inferBranchMetadataInto(itemSchema, item, rootSchema, [...path, index], [], branchSelection);
+      inferBranchMetadataInto(itemSchema, item, rootSchema, [...path, index], resolved.refStack, branchSelection);
     });
   }
 }
@@ -2354,7 +2374,7 @@ function getSingleArrayItemSchema(
   const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
   schema = resolved.schema;
   if (!schema.items || Array.isArray(schema.items)) return undefined;
-  return resolveSchemaWithRoot(schema.items, rootSchema).schema;
+  return resolveSchemaWithRoot(schema.items, rootSchema, resolved.refStack).schema;
 }
 
 function defaultBranchValue(

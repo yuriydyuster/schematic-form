@@ -90,12 +90,12 @@ describe("ref resolver", () => {
     });
   });
 
-  test("detects direct reference cycles without hanging", () => {
+  test("supports direct self-references without hanging", () => {
     const schema = {$ref: "#"} satisfies JsonSchema;
 
     expect(resolveSchemaReference(schema, schema)).toMatchObject({
-      ok: false,
-      reason: expect.stringContaining("Circular"),
+      ok: true,
+      schema: {$ref: "#"},
     });
   });
 });

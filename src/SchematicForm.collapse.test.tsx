@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import {beforeEach, describe, expect, test, vi} from "vitest";
 
 import {SchematicForm} from "./SchematicForm";
-import {kitchenSinkSchema} from "./sampleSchemas";
+import {kitchenSinkSchema, kitchenSinkSchemaInitialValue} from "./sampleSchemas";
 import type {JsonSchema, SchematicFormState} from "./types";
 
 function getSurface(container: HTMLElement, pointer: string) {
@@ -330,6 +330,51 @@ describe("SchematicForm collapsible object surfaces", () => {
     expect(keyChip).toHaveClass("chip--danger", "chip--soft", "chip--sm");
     expect(keyChip).not.toHaveTextContent(":");
     expect(summary).not.toHaveTextContent("Key #1");
+  });
+
+  test("shows collapsed branch summaries from valid initial data without invalid chips", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm schema={kitchenSinkSchema} defaultValue={kitchenSinkSchemaInitialValue} />,
+    );
+
+    const property = getSurface(container, "/properties/0");
+    await user.click(within(property).getByRole("button", {name: "Collapse Property #1"}));
+
+    const summary = property.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    expect(summary).not.toHaveTextContent("propertyAnnotation");
+    expect(summary?.querySelectorAll(".schematic-form__object-summary-chip.chip--danger")).toHaveLength(0);
+  });
+
+  test("does not render invalid branch wrapper chips for company schema summary", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm schema={kitchenSinkSchema} defaultValue={kitchenSinkSchemaInitialValue} />,
+    );
+
+    const property = getSurface(container, "/properties/3");
+    await user.click(within(property).getByRole("button", {name: "Collapse Property #4"}));
+
+    const summary = property.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    expect(summary).not.toHaveTextContent("propertyAnnotation");
+    expect(summary?.querySelectorAll(".schematic-form__object-summary-chip.chip--danger")).toHaveLength(0);
+  });
+
+  test("does not render invalid branch wrapper chips for array items schema summary", async () => {
+    const user = userEvent.setup();
+    const {container} = render(
+      <SchematicForm schema={kitchenSinkSchema} defaultValue={kitchenSinkSchemaInitialValue} />,
+    );
+
+    const property = getSurface(container, "/properties/4");
+    await user.click(within(property).getByRole("button", {name: "Collapse Property #5"}));
+
+    const summary = property.querySelector(".schematic-form__object-summary");
+    expect(summary).toBeInTheDocument();
+    expect(summary).not.toHaveTextContent("Items");
+    expect(summary?.querySelectorAll(".schematic-form__object-summary-chip.chip--danger")).toHaveLength(0);
   });
 
   test("limits collapsed object value chips to ten plus overflow marker", async () => {

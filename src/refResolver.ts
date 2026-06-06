@@ -22,7 +22,12 @@ export function resolveSchemaReference(
   }
 
   if (refStack.includes(ref)) {
-    return {ok: false, reason: `Circular schema reference: ${[...refStack, ref].join(" -> ")}`, refStack};
+    const target = resolveLocalJsonPointer(rootSchema, ref);
+    if (!target.ok) return {ok: false, reason: target.reason, refStack};
+    if (!isSchemaObject(target.value)) {
+      return {ok: false, reason: `Schema reference does not resolve to an object schema: ${ref}`, refStack};
+    }
+    return {ok: true, schema: mergeReferenceSiblings(target.value, schema), refStack};
   }
 
   const target = resolveLocalJsonPointer(rootSchema, ref);
