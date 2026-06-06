@@ -282,7 +282,7 @@ export function SchematicForm<TData = unknown>({
   useEffect(() => {
     if (objectExpansionHydratedKeyRef.current === objectExpansionStorageKey) return;
     objectExpansionHydratedKeyRef.current = objectExpansionStorageKey;
-    setObjectExpandedByPointer(readObjectExpansionState(objectExpansionStorageKey));
+    setObjectExpandedByPointer({});
   }, [objectExpansionStorageKey]);
 
   useEffect(() => {
@@ -494,6 +494,7 @@ export function SchematicForm<TData = unknown>({
     setBranchSelection({});
     setBranchValueCache({});
     setRowIdsByPointer({});
+    setObjectExpandedByPointer({});
     rowIdCounter.current = 0;
 
     if (draftStorage && draftKey) {
@@ -1193,9 +1194,16 @@ function renderBranch<TData>(
 
     const cachedKey = String(nextIndex);
     const hasCachedValue = Object.prototype.hasOwnProperty.call(nextCacheForPointer, cachedKey);
-    const nextValue = hasCachedValue
+    const baseNextValue = hasCachedValue
       ? cloneDraftValue(nextCacheForPointer[cachedKey])
       : defaultBranchValue(branches[nextIndex], context.rootSchema);
+    const nextValue = mergeCompatibleBranchObjectValues(
+      baseNextValue,
+      getAtPath(context.data, path),
+      selected,
+      branches[nextIndex],
+      context.rootSchema,
+    );
     context.setBranchValueCache((current) => ({
       ...current,
       [pointer]: {
@@ -1474,8 +1482,8 @@ function renderNumber<TData>(
   context: RendererContext<TData>,
 ) {
   const type = getSchemaType(schema);
-  if (type === "integer" && typeof schema.minimum === "number" && typeof schema.maximum === "number") {
-    return renderIntegerSlider(schema, path, required, context);
+  if (isNumericSliderSchema(schema)) {
+    return renderNumericSlider(schema, path, required, context);
   }
 
   const pointer = toPointer(path);
@@ -1512,7 +1520,7 @@ function renderNumber<TData>(
   );
 }
 
-function renderIntegerSlider<TData>(
+function renderNumericSlider<TData>(
   schema: JsonSchema,
   path: PathSegment[],
   required: boolean,
@@ -1521,7 +1529,7 @@ function renderIntegerSlider<TData>(
   const pointer = toPointer(path);
   const label = getLabel(schema, path);
   const rawValue = getAtPath(context.data, path);
-  const step = getIntegerSliderStep(schema);
+  const step = getNumericSliderStep(schema);
   const unsetValue = (schema.minimum ?? 0) - step;
   const minValue = required ? schema.minimum : unsetValue;
   const value = typeof rawValue === "number" ? rawValue : minValue;
@@ -1995,9 +2003,9 @@ function groupIssuesByPath(issues: ValidationIssue[]): Map<string, ValidationIss
 }
 
 function getRootSchemaLabel(schema: JsonSchema): string {
+  if (typeof schema.title === "string" && schema.title.trim()) return schema.title.trim();
   const name = schema.name;
   if (typeof name === "string" && name.trim()) return name.trim();
-  if (typeof schema.title === "string" && schema.title.trim()) return schema.title.trim();
   return "";
 }
 
@@ -2102,7 +2110,7 @@ function materializeObjectRequiredImplicitValues(
       continue;
     }
 
-    if (childIsRequired && isIntegerSliderSchema(childSchema, rootSchema, resolved.refStack) && (currentValue === undefined || !hasValue)) {
+    if (childIsRequired && isNumericSliderSchema(childSchema, rootSchema, resolved.refStack) && (currentValue === undefined || !hasValue)) {
       nextData = setObjectKey(nextData, key, childSchema.minimum);
       changed = true;
       continue;
@@ -2126,19 +2134,22 @@ function materializeObjectRequiredImplicitValues(
   return changed ? nextData : data;
 }
 
-function isIntegerSliderSchema(schema: JsonSchema, rootSchema?: JsonSchema, refStack: string[] = []): boolean {
+function isNumericSliderSchema(schema: JsonSchema, rootSchema?: JsonSchema, refStack: string[] = []): boolean {
   const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
   schema = resolved.schema;
-  return getSchemaType(schema, {rootSchema, refStack: resolved.refStack}) === "integer" &&
-    typeof schema.minimum === "number" &&
-    typeof schema.maximum === "number";
+  const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
+  const hasMinimum = typeof schema.minimum === "number";
+  const hasMaximum = typeof schema.maximum === "number";
+  if (type === "integer") return hasMinimum && hasMaximum;
+  if (type === "number") return hasMinimum && hasMaximum && typeof schema.multipleOf === "number";
+  return false;
 }
 
 function isSingleEnumSchema(schema: JsonSchema, rootSchema?: JsonSchema, refStack: string[] = []): boolean {
   return getSingleEnumValue(schema, {rootSchema, refStack}) !== undefined;
 }
 
-function getIntegerSliderStep(schema: JsonSchema): number {
+function getNumericSliderStep(schema: JsonSchema): number {
   return typeof schema.multipleOf === "number" && schema.multipleOf > 0 ? schema.multipleOf : 1;
 }
 
@@ -2187,6 +2198,64 @@ function defaultBranchValue(
   if (type === "string") return "";
   if (type === "number" || type === "integer") return schema.minimum ?? 0;
   return undefined;
+}
+
+function mergeCompatibleBranchObjectValues(
+  nextValue: unknown,
+  previousValue: unknown,
+  previousSchema: JsonSchema | undefined,
+  nextSchema: JsonSchema,
+  rootSchema?: JsonSchema,
+): unknown {
+  if (!isRecord(nextValue) || !isRecord(previousValue) || !previousSchema) return nextValue;
+
+  const resolvedPrevious = resolveSchemaWithRoot(previousSchema, rootSchema);
+  const resolvedNext = resolveSchemaWithRoot(nextSchema, rootSchema);
+  const previousProperties = resolvedPrevious.schema.properties ?? {};
+  const nextProperties = resolvedNext.schema.properties ?? {};
+  let merged = nextValue;
+
+  for (const [key, nextChildSchema] of Object.entries(nextProperties)) {
+    if (!Object.prototype.hasOwnProperty.call(previousValue, key)) continue;
+    if (Object.prototype.hasOwnProperty.call(nextValue, key)) continue;
+    if (isSingleEnumSchema(nextChildSchema, rootSchema, resolvedNext.refStack)) continue;
+
+    const previousChildSchema = previousProperties[key];
+    if (!previousChildSchema) continue;
+    if (!schemasHaveMatchingValueType(previousChildSchema, nextChildSchema, rootSchema)) continue;
+
+    const previousChildValue = previousValue[key];
+    if (!isValueCompatibleWithSchemaType(previousChildValue, nextChildSchema, rootSchema, resolvedNext.refStack)) continue;
+    merged = setObjectKey(merged, key, cloneDraftValue(previousChildValue));
+  }
+
+  return merged;
+}
+
+function schemasHaveMatchingValueType(previousSchema: JsonSchema, nextSchema: JsonSchema, rootSchema?: JsonSchema): boolean {
+  const previousResolved = resolveSchemaWithRoot(previousSchema, rootSchema);
+  const nextResolved = resolveSchemaWithRoot(nextSchema, rootSchema);
+  return getSchemaType(previousResolved.schema, {rootSchema, refStack: previousResolved.refStack}) ===
+    getSchemaType(nextResolved.schema, {rootSchema, refStack: nextResolved.refStack});
+}
+
+function isValueCompatibleWithSchemaType(
+  value: unknown,
+  schema: JsonSchema,
+  rootSchema?: JsonSchema,
+  refStack: string[] = [],
+): boolean {
+  const resolved = resolveSchemaWithRoot(schema, rootSchema, refStack);
+  const type = getSchemaType(resolved.schema, {rootSchema, refStack: resolved.refStack});
+  if (value === undefined) return false;
+  if (type === "string") return typeof value === "string";
+  if (type === "boolean") return typeof value === "boolean";
+  if (type === "number") return typeof value === "number";
+  if (type === "integer") return typeof value === "number" && Number.isInteger(value);
+  if (type === "null") return value === null;
+  if (type === "array") return Array.isArray(value);
+  if (type === "object") return isRecord(value);
+  return false;
 }
 
 function applyBranchSelections(

@@ -370,4 +370,48 @@ describe("SchematicForm collapsible object surfaces", () => {
     const third = render(<SchematicForm schema={profileSchema} />);
     expect(getSurface(third.container, "/owner")).not.toHaveAttribute("data-sf-collapsed");
   });
+
+  test("resets collapsed object state when the form is reset", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={profileSchema} />);
+
+    const owner = getSurface(container, "/owner");
+    await user.click(within(owner).getByRole("button", {name: "Collapse Owner"}));
+    expect(owner).toHaveAttribute("data-sf-collapsed", "true");
+
+    await user.click(screen.getByRole("button", {name: "Reset"}));
+
+    expect(owner).not.toHaveAttribute("data-sf-collapsed");
+    expect(within(owner).getByRole("button", {name: "Collapse Owner"})).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("resets collapsed object state when the source schema changes", async () => {
+    const user = userEvent.setup();
+    const nextSchema = {
+      type: "object",
+      title: "Updated profile form",
+      properties: {
+        owner: {
+          type: "object",
+          title: "Owner",
+          description: "Updated nested owner fields.",
+          properties: {
+            name: {type: "string", title: "Owner name"},
+          },
+        },
+      },
+    } satisfies JsonSchema;
+    const {container, rerender} = render(<SchematicForm schema={profileSchema} />);
+
+    await user.click(within(getSurface(container, "/owner")).getByRole("button", {name: "Collapse Owner"}));
+    expect(getSurface(container, "/owner")).toHaveAttribute("data-sf-collapsed", "true");
+
+    rerender(<SchematicForm schema={nextSchema} />);
+
+    expect(getSurface(container, "/owner")).not.toHaveAttribute("data-sf-collapsed");
+    expect(within(getSurface(container, "/owner")).getByRole("button", {name: "Collapse Owner"})).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
 });

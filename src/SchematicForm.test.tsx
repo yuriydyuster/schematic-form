@@ -93,7 +93,7 @@ describe("SchematicForm", () => {
     expect(container.querySelector(".schematic-form__surface[data-sf-path=\"/\"]")).toContainElement(title);
   });
 
-  test("uses schema name before title for the root form label", () => {
+  test("uses schema title before name for the root form label", () => {
     const schema = {
       type: "object",
       name: "Schema name",
@@ -103,9 +103,9 @@ describe("SchematicForm", () => {
 
     render(<SchematicForm schema={schema} />);
 
-    expect(screen.getByRole("form", {name: "Schema name"})).toBeInTheDocument();
-    expect(screen.getByRole("heading", {level: 2, name: "Schema name"})).toBeInTheDocument();
-    expect(screen.queryByRole("heading", {level: 2, name: "Schema title"})).not.toBeInTheDocument();
+    expect(screen.getByRole("form", {name: "Schema title"})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {level: 2, name: "Schema title"})).toBeInTheDocument();
+    expect(screen.queryByRole("heading", {level: 2, name: "Schema name"})).not.toBeInTheDocument();
   });
 
   test("renders display-only null fields and excludes them from data state", async () => {
@@ -436,6 +436,48 @@ describe("SchematicForm", () => {
     });
     expect(container.querySelector('[data-sf-path="/optionalScore"] input')).toHaveValue("0");
     expect(container.querySelector('[data-sf-path="/steppedScore"] input')).toHaveValue("5");
+  });
+
+  test("renders number sliders only when minimum, maximum, and multipleOf are set", () => {
+    const schema = {
+      type: "object",
+      title: "Numeric rendering",
+      properties: {
+        integerSlider: {
+          type: "integer",
+          title: "Integer slider",
+          minimum: 1,
+          maximum: 5,
+        },
+        numberSlider: {
+          type: "number",
+          title: "Number slider",
+          minimum: 0,
+          maximum: 1,
+          multipleOf: 0.1,
+        },
+        numberWithoutStep: {
+          type: "number",
+          title: "Number without step",
+          minimum: 0,
+          maximum: 1,
+        },
+        numberWithoutMaximum: {
+          type: "number",
+          title: "Number without maximum",
+          minimum: 0,
+          multipleOf: 0.1,
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} />);
+
+    expect(container.querySelector('[data-sf-path="/integerSlider"]')).toHaveClass("slider");
+    expect(container.querySelector('[data-sf-path="/numberSlider"]')).toHaveClass("slider");
+    expect(container.querySelector('[data-sf-path="/numberSlider"] input')).toHaveAttribute("step", "0.1");
+    expect(container.querySelector('[data-sf-path="/numberWithoutStep"]')).toHaveClass("number-field");
+    expect(container.querySelector('[data-sf-path="/numberWithoutMaximum"]')).toHaveClass("number-field");
   });
 
   test("renders boolean fields as switches with labels before the control", () => {
@@ -829,7 +871,7 @@ describe("SchematicForm", () => {
       },
     } satisfies JsonSchema;
 
-    render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("Please review the highlighted fields.");
@@ -1125,6 +1167,74 @@ describe("SchematicForm", () => {
     await waitFor(() => expect(screen.getByLabelText("Card number")).toHaveValue("411111"));
   });
 
+  test("reuses compatible object values in data state when switching to a cached branch variant", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Property annotation",
+      properties: {
+        annotation: {
+          title: "Property type",
+          oneOf: [
+            {
+              type: "object",
+              title: "String",
+              required: ["type"],
+              properties: {
+                type: {type: "string", enum: ["string"]},
+                title: {type: "string", title: "Title"},
+                description: {type: "string", title: "Description"},
+                maxLength: {type: "integer", title: "Maximum Length"},
+              },
+            },
+            {
+              type: "object",
+              title: "Number",
+              required: ["type"],
+              properties: {
+                type: {type: "string", enum: ["number"]},
+                title: {type: "string", title: "Title"},
+                description: {type: "string", title: "Description"},
+                maximum: {type: "number", title: "Maximum"},
+              },
+            },
+          ],
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "Number"}));
+
+    await user.click(screen.getByRole("button", {name: /number property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
+    await user.type(screen.getByLabelText("Title"), "Shared title");
+    await user.type(screen.getByLabelText("Description"), "Shared description");
+    fireEvent.change(container.querySelector('[data-sf-path="/annotation/maxLength"] input') as HTMLInputElement, {
+      target: {value: "42"},
+    });
+
+    await user.click(screen.getByRole("button", {name: /string property type/i}));
+    await user.click(await screen.findByRole("option", {name: "Number"}));
+
+    await waitFor(() => {
+      const latestData = onStateChange.mock.calls.at(-1)?.[0].data;
+      expect(latestData).toEqual({
+        annotation: {
+          type: "number",
+          title: "Shared title",
+          description: "Shared description",
+        },
+      });
+    });
+    expect(screen.getByLabelText("Title")).toHaveValue("Shared title");
+    expect(screen.getByLabelText("Description")).toHaveValue("Shared description");
+    expect(container.querySelector('[data-sf-path="/annotation/maximum"] input')).toHaveValue("");
+  });
+
   test("uses explicit branch defaults to select and render a nested oneOf structure", () => {
     const schema = {
       type: "object",
@@ -1300,6 +1410,7 @@ describe("SchematicForm", () => {
     await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
     await user.click(await screen.findByRole("option", {name: "Object"}));
 
+    expect(within(item).queryByLabelText("Default")).not.toBeInTheDocument();
     const nestedProperties = getSurface(container, "/properties/0/propertyAnnotation/properties");
     expect(within(nestedProperties).getByRole("button", {name: /add property/i})).toBeInTheDocument();
 

@@ -31,7 +31,7 @@ The demo form schema should be a classic JSON Schema that validates this proto-s
 ```ts
 type ProtoSchemaObject = {
   $schema: "https://json-schema.org/draft/2020-12/schema";
-  name?: string;
+  name: string;
   title?: string;
   description?: string;
   type: "object";
@@ -53,7 +53,6 @@ type ProtoObjectAnnotation = {
   title?: string;
   description?: string;
   type: "object";
-  default?: Record<string, unknown>;
   properties: ProtoProperty[];
   additionalProperties?: boolean;
 };
@@ -66,7 +65,7 @@ Array annotations should point `items` at a recursive property annotation or pro
 - Replace the demo schema with a classic JSON Schema describing a proto-schema object.
 - Add top-level proto-schema fields before the property array:
   - `$schema` with single enum option `"https://json-schema.org/draft/2020-12/schema"`
-  - `name`
+  - required `name`
   - `title`
   - `description`
   - `type` with single enum option `"object"`
@@ -74,7 +73,11 @@ Array annotations should point `items` at a recursive property annotation or pro
 - Add `additionalProperties: boolean` after the property array.
 - Ensure every nested object annotation inside the proto-schema schema uses proto-schema logic: array-based `properties`, per-item `key`, per-item `required`, and nested `propertyAnnotation`.
 - Add a helper that converts a created proto-schema object into a classic JSON Schema object.
-- On successful demo submit, convert the proto-schema to classic JSON Schema and open a right-side drawer containing a `SchematicForm` rendered with that converted schema.
+- On successful demo submit, convert the proto-schema to classic JSON Schema and open a HeroUI right-side drawer containing a `SchematicForm` rendered with that converted schema.
+- Preserve compatible values when switching branch variants by copying same-key object fields whose effective schema types match, while keeping selected-branch single-value enums authoritative.
+- Reset object collapse/expanded state to defaults when the source schema changes or the form is reset.
+- Render the root form label from `title` before `name`.
+- Render numeric sliders only for integer schemas with `minimum` and `maximum`, and number schemas with `minimum`, `maximum`, and `multipleOf`.
 - Preserve the existing state/debug panel or replace it with equivalent useful demo state without hiding the submitted proto-schema data.
 
 ## Non-Goals
@@ -105,13 +108,13 @@ Converter responsibilities:
 - Convert each property from `propertyAnnotation`.
 - For object annotations, recursively convert nested proto property arrays into classic nested `properties` and `required`.
 - For array annotations, convert `items` recursively.
-- Preserve scalar constraints such as `default`, `enum`, `format`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `multipleOf`, `minItems`, `maxItems`, and `uniqueItems` when present.
+- Preserve scalar constraints such as `default`, `enum`, `format`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`, `multipleOf`, `minItems`, `maxItems`, and `uniqueItems` when present. Object annotations do not expose `default` in the proto-schema authoring schema.
 - Avoid mutating the proto-schema input.
 
 Validation in this helper should be narrow and defensive:
 
 - Ignore proto properties without a valid non-empty `key`.
-- Decide whether duplicate keys are last-write-wins or rejected. Prefer returning a clear conversion error for duplicates if the demo can surface it cleanly.
+- Reject duplicate keys with a clear conversion error.
 - Omit undefined optional fields from the output instead of serializing them.
 
 ### 2. Replace The Demo Authoring Schema
@@ -135,7 +138,7 @@ propertyOrdering: [
 Expected root properties:
 
 - `$schema`: required string enum with only `"https://json-schema.org/draft/2020-12/schema"`.
-- `name`: optional string annotation.
+- `name`: required string annotation.
 - `title`: optional string annotation.
 - `description`: optional string annotation.
 - `type`: required string enum with only `"object"`.
@@ -159,18 +162,14 @@ Update `demo/main.tsx`:
 - Track latest proto-schema state for the debug panel.
 - On valid submit, call `protoSchemaToJsonSchema`.
 - Store the converted schema in React state.
-- Open a right-side drawer.
+- Open a HeroUI right-side drawer.
 - Render a second `SchematicForm` inside the drawer using the converted classic schema.
+- Add HeroUI tabs at the top of the drawer content:
+  - `Form`, selected by default, renders the generated form.
+  - `JSON` renders the generated JSON Schema in a HeroUI `Surface` with an icon-only copy button in the top-right corner.
 - Show conversion errors in the demo if conversion fails after form validation.
 
-Use HeroUI drawer components if available in the installed HeroUI version. If the exact drawer API is not available, use the repo's existing CSS approach in `demo/styles.css` for an accessible fixed right-side panel with:
-
-- close button
-- `role="dialog"` or equivalent accessible labeling
-- scrollable drawer body
-- converted-schema preview form
-
-Do not import new runtime dependencies just for the drawer.
+Use HeroUI drawer components from `@heroui/react/drawer`; do not use a hand-rolled drawer or add a new runtime dependency.
 
 ### 4. Style The Demo Drawer
 
@@ -181,14 +180,12 @@ Update `demo/styles.css` only for demo-specific layout:
 - Avoid changing package styles in `src/styles.css` unless the implementation reveals a library styling bug.
 - Ensure the drawer does not cover the submit controls on narrow screens without an obvious close path.
 
-### 5. Export Helper If Useful
+### 5. Keep Helper Demo-Only
 
-Decide whether `protoSchemaToJsonSchema` should be public:
+Keep `protoSchemaToJsonSchema` demo-only for now:
 
-- If it is demo-only, import it directly from `src/protoSchema.ts` in `demo/main.tsx` and do not export from `src/index.ts`.
-- If it is intended as package functionality, export it from `src/index.ts`, add public type exports, and mention it in README.
-
-Prefer demo-only unless the user confirms this helper is part of the library API.
+- Import it directly from `src/protoSchema.ts` in `demo/main.tsx`.
+- Do not export it from `src/index.ts`.
 
 ## Test Plan
 
@@ -211,6 +208,11 @@ Update existing `src/SchematicForm.test.tsx` tests that cover `kitchenSinkSchema
 - verify added recursive property rows expose `Key`, `Required`, and `Property Type`
 - verify nested object branch exposes a proto-style child `properties` array instead of classic object-shaped `properties`
 - verify validation errors stay targeted and do not produce schema compilation errors
+- verify object annotation does not render a `Default` field
+- verify `title` takes priority over `name` for root form labeling
+- verify numeric slider versus numeric field rendering rules
+- verify compatible branch values are reused when switching to uncached variants
+- verify collapse state resets on schema changes and form reset
 
 ### Browser Acceptance
 
@@ -242,6 +244,4 @@ Update `docs/ARCHITECTURE.md` only if the helper becomes part of the library mod
 
 ## Open Questions
 
-- Should `protoSchemaToJsonSchema` be public package API or demo-only?
-- Should duplicate proto property keys be rejected with a conversion error, or should later entries overwrite earlier entries?
-- Should the generated preview drawer show only the rendered form, or also show the converted JSON Schema text for inspection?
+- None.

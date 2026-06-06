@@ -4,7 +4,7 @@ export const JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema
 
 export type ProtoSchemaObject = {
   $schema: typeof JSON_SCHEMA_2020_12;
-  name?: string;
+  name: string;
   title?: string;
   description?: string;
   type: "object";

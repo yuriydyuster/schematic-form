@@ -1,5 +1,7 @@
 import React from "react";
 import {createRoot} from "react-dom/client";
+import {Button, Drawer, Surface, Tabs, useOverlayState} from "@heroui/react";
+import {Copy} from "@gravity-ui/icons";
 
 import {SchematicForm, type JsonSchema, type SchematicFormState} from "../src";
 import {protoSchemaToJsonSchema, type ProtoSchemaObject} from "../src/protoSchema";
@@ -11,11 +13,23 @@ function App() {
   const [convertedSchema, setConvertedSchema] = React.useState<JsonSchema | null>(null);
   const [conversionError, setConversionError] = React.useState<string | null>(null);
   const [isPreviewOpen, setPreviewOpen] = React.useState(false);
+  const previewDrawerState = useOverlayState({
+    isOpen: isPreviewOpen,
+    onOpenChange: setPreviewOpen,
+  });
 
   const previewKey = React.useMemo(
     () => (convertedSchema ? JSON.stringify(convertedSchema) : "empty-preview"),
     [convertedSchema],
   );
+  const previewJson = React.useMemo(
+    () => (convertedSchema ? JSON.stringify(convertedSchema, null, 2) : ""),
+    [convertedSchema],
+  );
+  const copyPreviewJson = React.useCallback(() => {
+    if (!previewJson) return;
+    void navigator.clipboard?.writeText(previewJson).catch(() => undefined);
+  }, [previewJson]);
 
   return (
     <main className="demo-shell">
@@ -51,26 +65,43 @@ function App() {
         <h2>State</h2>
         <pre>{JSON.stringify(state, null, 2)}</pre>
       </aside>
-      {isPreviewOpen && convertedSchema ? (
-        <div className="demo-drawer-backdrop">
-          <aside
-            className="demo-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="demo-preview-title"
-          >
-            <header className="demo-drawer__header">
-              <h2 id="demo-preview-title">Generated Form Preview</h2>
-              <button className="demo-drawer__close" type="button" onClick={() => setPreviewOpen(false)}>
-                Close
-              </button>
-            </header>
-            <div className="demo-drawer__body">
-              <SchematicForm key={previewKey} schema={convertedSchema} validationMode="hybrid" />
-            </div>
-          </aside>
-        </div>
-      ) : null}
+      <Drawer.Root state={previewDrawerState}>
+        {convertedSchema ? (
+          <Drawer.Backdrop>
+            <Drawer.Content placement="right">
+              <Drawer.Dialog aria-label="Generated Form Preview" className="demo-drawer">
+                <Drawer.CloseTrigger />
+                <Drawer.Body className="demo-drawer__body">
+                  <Tabs defaultSelectedKey="form" className="demo-drawer__tabs">
+                    <Tabs.List>
+                      <Tabs.Tab id="form">Form</Tabs.Tab>
+                      <Tabs.Tab id="json">JSON</Tabs.Tab>
+                    </Tabs.List>
+                    <Tabs.Panel id="form" className="demo-drawer__tabpanel">
+                      <SchematicForm key={previewKey} schema={convertedSchema} validationMode="hybrid" />
+                    </Tabs.Panel>
+                    <Tabs.Panel id="json" className="demo-drawer__tabpanel">
+                      <Surface className="demo-json-surface">
+                        <Button
+                          aria-label="Copy generated JSON schema"
+                          className="demo-json-copy"
+                          isIconOnly
+                          type="button"
+                          variant="secondary"
+                          onPress={copyPreviewJson}
+                        >
+                          <Copy aria-hidden="true" focusable="false" />
+                        </Button>
+                        <pre>{previewJson}</pre>
+                      </Surface>
+                    </Tabs.Panel>
+                  </Tabs>
+                </Drawer.Body>
+              </Drawer.Dialog>
+            </Drawer.Content>
+          </Drawer.Backdrop>
+        ) : null}
+      </Drawer.Root>
     </main>
   );
 }

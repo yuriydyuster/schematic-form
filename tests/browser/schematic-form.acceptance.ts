@@ -63,7 +63,7 @@ test("invalid submit shows the summary and focuses the first invalid field", asy
   await page.getByRole("button", {name: "Submit"}).click();
 
   await expect(page.getByRole("alert")).toContainText("Please review the highlighted fields.");
-  await expect(page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i})).toBeFocused();
+  await expect(page.getByLabel("Name")).toBeFocused();
   await expectNoRuntimeErrors(errors);
 });
 
@@ -97,7 +97,7 @@ test("branch selectors switch and validate only the active branch", async ({page
   await selectValidation(page, row, "Array");
 
   await expect(row.getByText("Items", {exact: true})).toBeVisible();
-  await expect(page.getByText("Properties", {exact: true})).toHaveCount(0);
+  await expect(row.getByText("Properties", {exact: true})).toHaveCount(0);
 
   await page.getByRole("button", {name: "Submit"}).click();
 
@@ -110,6 +110,7 @@ test("valid proto-schema submit opens a generated form preview drawer", async ({
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
+  await page.getByLabel("Name").fill("GeneratedCustomer");
   await page.getByLabel("Title").fill("Generated Customer");
   const row = await addField(page, 0);
   await row.getByLabel("Key").fill("customerName");
@@ -119,8 +120,13 @@ test("valid proto-schema submit opens a generated form preview drawer", async ({
 
   const drawer = page.getByRole("dialog", {name: "Generated Form Preview"});
   await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("heading", {name: "Generated Form Preview"})).toHaveCount(0);
+  await expect(drawer.getByRole("tab", {name: "Form"})).toHaveAttribute("aria-selected", "true");
   await expect(drawer.getByRole("heading", {level: 2, name: "Generated Customer"})).toBeVisible();
   await expect(drawer.getByLabel("Customer name")).toBeVisible();
+  await drawer.getByRole("tab", {name: "JSON"}).click();
+  await expect(drawer.getByText('"title": "Generated Customer"')).toBeVisible();
+  await expect(drawer.getByRole("button", {name: "Copy generated JSON schema"})).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });
 

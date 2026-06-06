@@ -710,12 +710,6 @@ const propertyAnnotationSchema: JsonSchema = {
           "description": "Property value type.",
           "enum": ["object"]
         },
-        "default": {
-          "type": ["object"],
-          "title": "Default",
-          "description": "Default object value.",
-          "properties": {}
-        },
         "properties": {
           "type": ["array"],
           "title": "Properties",
@@ -829,7 +823,7 @@ export const kitchenSinkSchema = {
     },
     "properties": {
       "type": "array",
-      "title": "Schema",
+      "title": "Properties",
       "description": "Array of property definitions used to build the form.",
       "minItems": 1,
       "items": {
@@ -844,7 +838,7 @@ export const kitchenSinkSchema = {
       "description": "Whether generated object schemas allow undeclared properties."
     }
   },
-  "required": ["$schema", "type", "properties"],
+  "required": ["$schema", "name", "type", "properties"],
   "additionalProperties": false,
   "$defs": {
     "property": {

@@ -46,15 +46,6 @@ body {
   background: rgb(254 242 242);
 }
 
-.demo-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  justify-content: flex-end;
-  background: rgb(15 23 42 / 0.28);
-}
-
 .demo-drawer {
   display: flex;
   flex-direction: column;
@@ -66,40 +57,36 @@ body {
   box-shadow: -12px 0 30px rgb(15 23 42 / 0.18);
 }
 
-.demo-drawer__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 1px solid var(--color-border, rgb(229 231 235));
-  padding: 1rem;
-}
-
-.demo-drawer__header h2 {
-  margin: 0;
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.demo-drawer__close {
-  flex: 0 0 auto;
-  border: 1px solid var(--color-border, rgb(209 213 219));
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-
-.demo-drawer__close:hover {
-  background: rgb(243 244 246);
-}
-
 .demo-drawer__body {
   min-height: 0;
   overflow: auto;
   padding: 1rem;
+}
+
+.demo-drawer__tabs,
+.demo-drawer__tabpanel {
+  min-width: 0;
+}
+
+.demo-json-surface {
+  position: relative;
+  padding: 1rem;
+}
+
+.demo-json-copy {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+.demo-json-surface pre {
+  min-height: 0;
+  max-height: calc(100vh - 9rem);
+  overflow: auto;
+  margin: 0;
+  padding-right: 3rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
 @media (max-width: 820px) {
