@@ -5,6 +5,7 @@ import {
   getBranchSchemas,
   getDefaultBranchIndex,
   getOrderedPropertyKeys,
+  getSupportedFormat,
   isArrayOfStringEnum,
   isDisplayOnlySchema,
   isLongUnformattedString,
@@ -95,6 +96,10 @@ describe("schema helpers", () => {
     expect(isLongUnformattedString({type: "string", maxLength: 256})).toBe(true);
     expect(isLongUnformattedString({type: "string", minLength: 256})).toBe(true);
     expect(isLongUnformattedString({type: "string", format: "email", maxLength: 256})).toBe(false);
+    expect(isLongUnformattedString({type: "string", format: "hostname", maxLength: 256})).toBe(false);
+    expect(isLongUnformattedString({type: "string", format: "ipv4", maxLength: 256})).toBe(false);
+    expect(isLongUnformattedString({type: "string", format: "ipv6", maxLength: 256})).toBe(false);
+    expect(isLongUnformattedString({type: "string", format: "uuid", maxLength: 256})).toBe(false);
 
     expect(
       isArrayOfStringEnum({
@@ -109,6 +114,19 @@ describe("schema helpers", () => {
         items: {type: "string", enum: ["A", "B"]},
       }),
     ).toBe(false);
+  });
+
+  test("returns all supported string formats", () => {
+    expect(getSupportedFormat({type: "string", format: "date"})).toBe("date");
+    expect(getSupportedFormat({type: "string", format: "time"})).toBe("time");
+    expect(getSupportedFormat({type: "string", format: "date-time"})).toBe("date-time");
+    expect(getSupportedFormat({type: "string", format: "email"})).toBe("email");
+    expect(getSupportedFormat({type: "string", format: "uri"})).toBe("uri");
+    expect(getSupportedFormat({type: "string", format: "hostname"})).toBe("hostname");
+    expect(getSupportedFormat({type: "string", format: "ipv4"})).toBe("ipv4");
+    expect(getSupportedFormat({type: "string", format: "ipv6"})).toBe("ipv6");
+    expect(getSupportedFormat({type: "string", format: "uuid"})).toBe("uuid");
+    expect(getSupportedFormat({type: "string", format: "iri"})).toBeUndefined();
   });
 
   test("derives defaults through local refs", () => {

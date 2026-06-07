@@ -154,6 +154,11 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 | `format: "date"` | HeroUI date picker. |
 | `format: "date-time"` | HeroUI date picker with minute granularity. |
 | `format: "time"` | HeroUI time field. |
+| `format: "hostname"` | String input validated as hostname. |
+| `format: "ipv4"` | String input validated as IPv4 address. |
+| `format: "ipv6"` | String input validated as IPv6 address. |
+| `format: "uuid"` | String input validated as UUID. |
+| `pattern` on string | Regex validation enforced by Ajv. |
 | `type: "number"` / `type: "integer"` | Number field. |
 | Integer with `minimum` and `maximum` | Slider. |
 | `type: "boolean"` | Switch. |
@@ -210,7 +215,7 @@ Ajv is the validation engine. SchematicForm sanitizes the schema before validati
 - Display-only `type: "null"` properties are excluded.
 - `anyOf` is validated as `oneOf`.
 - `$defs` entries are sanitized recursively while local `$ref` remains Ajv-owned.
-- Unsupported string formats are ignored.
+- Unsupported string formats (outside `email`, `uri`, `date`, `date-time`, `time`, `hostname`, `ipv4`, `ipv6`, `uuid`) are ignored.
 - Dependency and conditional keywords are ignored in Beta.
 
 Public state always has this shape:

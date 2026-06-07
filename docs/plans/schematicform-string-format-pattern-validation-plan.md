@@ -153,3 +153,27 @@ npm run test:acceptance
 3. Proto-schema `key` is pattern-constrained to machine-friendly names.
 4. Relevant tests are added and passing in unit and browser acceptance suites.
 5. README and architecture docs reflect the expanded support contract.
+
+## Status (2026-06-07)
+
+- Completed.
+
+## Implementation Notes (2026-06-07)
+
+- Expanded supported format typing and helpers:
+- `src/types.ts`: `SupportedStringFormat` now includes `hostname`, `ipv4`, `ipv6`, `uuid`.
+- `src/schema.ts`: `supportedFormats` allowlist now includes the same formats.
+- Annotated proto-schema key with machine-friendly regex:
+- `src/sampleSchemas.ts`: `propertyKeyAnnotationSchema` now includes `pattern: "^[a-z][A-Za-z0-9_]*$"` and updated description text.
+- Added validation and UI coverage:
+- `src/validation.test.ts`: new tests for format validation (`hostname`, `ipv4`, `ipv6`, `uuid`), `pattern` validation, and sanitization retention of supported formats.
+- `src/schema.test.ts`: new tests for `getSupportedFormat` coverage and `isLongUnformattedString` behavior for newly supported formats.
+- `src/SchematicForm.test.tsx`: new UI tests for field-level + summary-level format/pattern errors and proto-schema key pattern enforcement.
+- `src/protoSchema.test.ts`: converter test now explicitly verifies `pattern` preservation on string annotations.
+- Updated docs:
+- `README.md`: supported behavior table now includes `hostname`, `ipv4`, `ipv6`, `uuid`, and string `pattern`.
+- `docs/ARCHITECTURE.md`: supported business-rules and validation boundaries updated for expanded format support.
+- Verification results:
+- `npm test`: passed.
+- `npm run lint`: passed.
+- `npm run test:acceptance`: passed (after running with permissions that allow local port binding for the Playwright web server).

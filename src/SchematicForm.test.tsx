@@ -1524,6 +1524,22 @@ describe("SchematicForm", () => {
     expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
   });
 
+  test("validates proto-schema key pattern as machine-friendly text", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+
+    await user.type(within(item).getByLabelText("Key"), "Full Name");
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    expect(within(item).getByText(/must match pattern/i)).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/properties\.0\.key: must match pattern/i);
+  });
+
   test("renders nested object annotation properties with proto-schema row shape", async () => {
     const user = userEvent.setup();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
@@ -2013,6 +2029,58 @@ describe("SchematicForm", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Please review the highlighted fields.");
     expect(screen.getAllByText(/must have required property/i).length).toBeGreaterThan(0);
+  });
+
+  test("shows format and pattern validation errors in fields and summary", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      type: "object",
+      title: "String validation",
+      required: ["host", "ipV4", "ipV6", "requestId", "key"],
+      properties: {
+        host: {type: "string", title: "Host", format: "hostname"},
+        ipV4: {type: "string", title: "IPv4", format: "ipv4"},
+        ipV6: {type: "string", title: "IPv6", format: "ipv6"},
+        requestId: {type: "string", title: "Request ID", format: "uuid"},
+        key: {type: "string", title: "Key", pattern: "^[a-z][A-Za-z0-9_]*$"},
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} />);
+
+    await user.type(screen.getByLabelText("Host"), "invalid host");
+    await user.type(screen.getByLabelText("IPv4"), "256.1.1.1");
+    await user.type(screen.getByLabelText("IPv6"), "2001::85a3::8a2e:0370:7334");
+    await user.type(screen.getByLabelText("Request ID"), "not-a-uuid");
+    await user.type(screen.getByLabelText("Key"), "Full Name");
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const hostField = container.querySelector('[data-sf-path="/host"]');
+    expect(hostField).toBeInTheDocument();
+    expect(within(hostField as HTMLElement).getByText(/must match format.*hostname/i)).toBeInTheDocument();
+
+    const ipV4Field = container.querySelector('[data-sf-path="/ipV4"]');
+    expect(ipV4Field).toBeInTheDocument();
+    expect(within(ipV4Field as HTMLElement).getByText(/must match format.*ipv4/i)).toBeInTheDocument();
+
+    const ipV6Field = container.querySelector('[data-sf-path="/ipV6"]');
+    expect(ipV6Field).toBeInTheDocument();
+    expect(within(ipV6Field as HTMLElement).getByText(/must match format.*ipv6/i)).toBeInTheDocument();
+
+    const requestIdField = container.querySelector('[data-sf-path="/requestId"]');
+    expect(requestIdField).toBeInTheDocument();
+    expect(within(requestIdField as HTMLElement).getByText(/must match format.*uuid/i)).toBeInTheDocument();
+
+    const keyField = container.querySelector('[data-sf-path="/key"]');
+    expect(keyField).toBeInTheDocument();
+    expect(within(keyField as HTMLElement).getByText(/must match pattern/i)).toBeInTheDocument();
+
+    const summary = await screen.findByRole("alert");
+    expect(summary).toHaveTextContent(/host: must match format.*hostname/i);
+    expect(summary).toHaveTextContent(/ipV4: must match format.*ipv4/i);
+    expect(summary).toHaveTextContent(/ipV6: must match format.*ipv6/i);
+    expect(summary).toHaveTextContent(/requestId: must match format.*uuid/i);
+    expect(summary).toHaveTextContent(/key: must match pattern/i);
   });
 
   test("renders date and time formats with HeroUI components", () => {

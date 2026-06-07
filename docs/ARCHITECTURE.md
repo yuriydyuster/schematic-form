@@ -60,7 +60,7 @@ SchematicForm Beta intentionally supports a bounded JSON Schema subset plus a fe
 - Root form label and root heading use schema `name` first, then `title`.
 - `propertyOrdering` renders listed object keys first, followed by remaining schema property order.
 - `type: "null"` renders a display-only title/description block and is excluded from form data and validation.
-- String formats `date`, `time`, `date-time`, `email`, and `uri` receive specialized controls or native input semantics. Unsupported formats are ignored for rendering and stripped before validation.
+- String formats `date`, `time`, and `date-time` receive specialized controls; `email` and `uri` receive native input semantics; `hostname`, `ipv4`, `ipv6`, and `uuid` remain string inputs with validation-only semantics. Unsupported formats are ignored for rendering and stripped before validation.
 - Long unformatted strings become text areas when `minLength` or `maxLength` is greater than `255`.
 - Integer fields with both `minimum` and `maximum` render as sliders. Other numbers and integers render as number fields.
 - Scalar enums with fewer than six options render as radios. Scalar enums with six or more options render as dropdowns.
@@ -84,7 +84,7 @@ Validation is separated from rendering. `validation.ts` sanitizes the schema bef
 - `anyOf` is converted to `oneOf`.
 - `$defs` entries are sanitized recursively while `$ref` remains in the schema for Ajv to resolve.
 - `propertyOrdering`, `allOf`, `dependencies`, `dependentRequired`, `dependentSchemas`, `if`, `then`, `else`, and `unevaluatedProperties` are ignored in Beta.
-- Unsupported string formats are removed before Ajv sees the schema.
+- Supported string formats are `email`, `uri`, `date`, `date-time`, `time`, `hostname`, `ipv4`, `ipv6`, and `uuid`; unsupported formats are removed before Ajv sees the schema.
 - Ajv runs with `allErrors: true`, strict mode, schema validation, and a custom `time` format.
 
 Unsupported schema features should be documented or planned before implementation. Do not partially implement advanced JSON Schema behavior in the renderer without updating validation and tests.

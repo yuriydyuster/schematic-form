@@ -147,6 +147,78 @@ describe("validation", () => {
     expect(validator.validate({startsAt: "24:30:00"}).isValid).toBe(false);
   });
 
+  test("validates hostname, ipv4, ipv6, and uuid formats", () => {
+    const validator = createSchemaValidator({
+      type: "object",
+      properties: {
+        host: {type: "string", format: "hostname"},
+        ipV4: {type: "string", format: "ipv4"},
+        ipV6: {type: "string", format: "ipv6"},
+        requestId: {type: "string", format: "uuid"},
+      },
+    });
+
+    expect(
+      validator.validate({
+        host: "example.com",
+        ipV4: "192.168.0.1",
+        ipV6: "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+        requestId: "550e8400-e29b-41d4-a716-446655440000",
+      }).isValid,
+    ).toBe(true);
+    expect(
+      validator.validate({
+        host: "invalid host",
+        ipV4: "256.10.10.10",
+        ipV6: "2001::85a3::8a2e:0370:7334",
+        requestId: "not-a-uuid",
+      }).isValid,
+    ).toBe(false);
+  });
+
+  test("validates string patterns", () => {
+    const validator = createSchemaValidator({
+      type: "object",
+      properties: {
+        key: {type: "string", pattern: "^[a-z][A-Za-z0-9_]*$"},
+      },
+    });
+
+    expect(validator.validate({key: "fullName_2"}).isValid).toBe(true);
+    const result = validator.validate({key: "Full Name"});
+    expect(result.isValid).toBe(false);
+    expect(result.issues[0]).toMatchObject({
+      path: "/key",
+      fieldPath: "key",
+      keyword: "pattern",
+    });
+    expect(result.errors[0]).toMatch(/key:.*must match pattern/i);
+  });
+
+  test("retains newly supported formats and strips unsupported formats during sanitization", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        host: {type: "string", format: "hostname"},
+        ipV4: {type: "string", format: "ipv4"},
+        ipV6: {type: "string", format: "ipv6"},
+        requestId: {type: "string", format: "uuid"},
+        unknown: {type: "string", format: "iri"},
+      },
+    } satisfies JsonSchema;
+
+    expect(sanitizeSchemaForValidation(schema)).toEqual({
+      type: "object",
+      properties: {
+        host: {type: "string", format: "hostname"},
+        ipV4: {type: "string", format: "ipv4"},
+        ipV6: {type: "string", format: "ipv6"},
+        requestId: {type: "string", format: "uuid"},
+        unknown: {type: "string"},
+      },
+    });
+  });
+
   test("sanitizes reusable $defs without expanding local refs", () => {
     const schema = {
       type: "object",

@@ -2,7 +2,17 @@ import type {JsonPrimitive, JsonSchema, JsonValue, PathSegment, SchemaType, Supp
 import type {SchemaResolutionContext} from "./refResolver";
 import {resolveSchemaForContext} from "./refResolver";
 
-const supportedFormats = new Set<SupportedStringFormat>(["date", "time", "date-time", "email", "uri"]);
+const supportedFormats = new Set<SupportedStringFormat>([
+  "date",
+  "time",
+  "date-time",
+  "email",
+  "uri",
+  "hostname",
+  "ipv4",
+  "ipv6",
+  "uuid",
+]);
 
 export function getSchemaType(schema: JsonSchema, context: SchemaResolutionContext = {}): SchemaType | undefined {
   schema = getEffectiveSchema(schema, context).schema;

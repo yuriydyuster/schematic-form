@@ -14,7 +14,16 @@ export type SchemaType =
   | "boolean"
   | "null";
 
-export type SupportedStringFormat = "date" | "time" | "date-time" | "email" | "uri";
+export type SupportedStringFormat =
+  | "date"
+  | "time"
+  | "date-time"
+  | "email"
+  | "uri"
+  | "hostname"
+  | "ipv4"
+  | "ipv6"
+  | "uuid";
 
 export type JsonSchema = {
   $id?: string;

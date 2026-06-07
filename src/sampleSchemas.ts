@@ -421,8 +421,9 @@ export const primitiveSchema = {
 const propertyKeyAnnotationSchema: JsonSchema = {
   "type": ["string"],
   "title": "Key",
-  "description": "Unique property key.",
-  "minLength": 1
+  "description": "Machine-friendly property key (lower camelCase, digits, and underscores).",
+  "minLength": 1,
+  "pattern": "^[a-z][A-Za-z0-9_]*$"
 };
 
 const propertyRequiredAnnotationSchema: JsonSchema = {
