@@ -1,7 +1,7 @@
 import {expect, test, type Locator, type Page} from "@playwright/test";
 
 const draftKey = "schematic-form:proto-schema-demo";
-const initialPropertyCount = 6;
+const initialPropertyCount = 7;
 
 function getBuilderForm(page: Page): Locator {
   return page.locator("section.demo-form .schematic-form__form").first();
@@ -76,11 +76,14 @@ test("loads the demo without browser runtime errors", async ({page}) => {
   await expect(getTopLevelPropertyKeyInput(page, 0)).toHaveValue("fullName");
   await expect(getTopLevelPropertyKeyInput(page, 3)).toHaveValue("company");
   await expect(getTopLevelPropertyKeyInput(page, 4)).toHaveValue("topics");
+  await expect(getTopLevelPropertyKeyInput(page, 5)).toHaveValue("preferredContact");
   await expect(form.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /string property type/i})).toBeVisible();
   await expect(form.locator('[data-sf-path="/properties/3"]').getByRole("button", {name: /object property type/i})).toBeVisible();
   await expect(form.locator('[data-sf-path="/properties/3/propertyAnnotation/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
   await expect(form.locator('[data-sf-path="/properties/4"]').getByRole("button", {name: /array property type/i})).toBeVisible();
   await expect(form.locator('[data-sf-path="/properties/4/propertyAnnotation/items"]').getByRole("button", {name: /string items/i})).toBeVisible();
+  await expect(form.locator('[data-sf-path="/properties/5"]').getByRole("button", {name: /one of property type/i})).toBeVisible();
+  await expect(form.locator('[data-sf-path="/properties/5/propertyAnnotation/oneOf/0"]').getByRole("button", {name: /string variant #1/i})).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });
 
@@ -154,8 +157,13 @@ test("valid proto-schema submit opens a generated form preview drawer", async ({
   await expect(drawer.getByRole("tab", {name: "Form"})).toHaveAttribute("aria-selected", "true");
   await expect(drawer.getByRole("heading", {level: 2, name: "Generated Customer"})).toBeVisible();
   await expect(drawer.getByLabel("Customer name")).toBeVisible();
+  await expect(
+    drawer.locator('[data-sf-path="/preferredContact"]').getByRole("button", {name: /select an option/i}),
+  ).toBeVisible();
   await drawer.getByRole("tab", {name: "JSON"}).click();
   await expect(drawer.getByText('"title": "Generated Customer"')).toBeVisible();
+  await expect(drawer.getByText('"preferredContact"')).toBeVisible();
+  await expect(drawer.getByText('"oneOf": [')).toBeVisible();
   await expect(drawer.getByRole("button", {name: "Copy generated JSON schema"})).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });

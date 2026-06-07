@@ -245,3 +245,7 @@ Update `docs/ARCHITECTURE.md` only if the helper becomes part of the library mod
 ## Open Questions
 
 - None.
+
+## Follow-Up Notes (2026-06-07)
+
+- Proto `propertyAnnotation` variants now also include a dedicated `oneOf` authoring variant (`type: "oneOf"` with recursive `oneOf[]` branch annotations).

@@ -1448,6 +1448,12 @@ describe("SchematicForm", () => {
     expect(container.querySelector('[data-sf-path="/properties/4/key"] input')).toHaveValue("topics");
     expect(within(topics).getByRole("button", {name: /array property type/i})).toBeInTheDocument();
     expect(within(getSurface(container, "/properties/4/propertyAnnotation/items")).getByRole("button", {name: /string items/i})).toBeInTheDocument();
+
+    const preferredContact = getSurface(container, "/properties/5");
+    expect(container.querySelector('[data-sf-path="/properties/5/key"] input')).toHaveValue("preferredContact");
+    expect(within(preferredContact).getByRole("button", {name: /one of property type/i})).toBeInTheDocument();
+    expect(within(getSurface(container, "/properties/5/propertyAnnotation/oneOf")).getByRole("button", {name: /add variant/i})).toBeInTheDocument();
+    expect(within(getSurface(container, "/properties/5/propertyAnnotation/oneOf/0")).getByRole("button", {name: /string variant #1/i})).toBeInTheDocument();
   });
 
   test("validates an added local ref item that keeps its nested branch unselected", async () => {
@@ -1522,6 +1528,22 @@ describe("SchematicForm", () => {
     expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
     expect(within(item).queryByText("Property name used as the object key.")).not.toBeInTheDocument();
     expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
+  });
+
+  test("shows field errors for an incomplete selected oneOf property type", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+
+    await user.type(within(item).getByLabelText("Key"), "preferredContact");
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "One Of"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
+    expect(within(item).getByText(/must NOT have fewer than 1 items/i)).toBeInTheDocument();
   });
 
   test("validates proto-schema key pattern as machine-friendly text", async () => {

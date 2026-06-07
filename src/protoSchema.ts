@@ -24,7 +24,8 @@ export type ProtoPropertyAnnotation =
   | ProtoBooleanAnnotation
   | ProtoNullAnnotation
   | ProtoArrayAnnotation
-  | ProtoObjectAnnotation;
+  | ProtoObjectAnnotation
+  | ProtoOneOfAnnotation;
 
 type ProtoBaseAnnotation = {
   title?: string;
@@ -88,6 +89,11 @@ export type ProtoObjectAnnotation = ProtoBaseAnnotation & {
   additionalProperties?: boolean;
 };
 
+export type ProtoOneOfAnnotation = Omit<ProtoBaseAnnotation, "default" | "enum"> & {
+  type: "oneOf";
+  oneOf: ProtoPropertyAnnotation[];
+};
+
 export class ProtoSchemaConversionError extends Error {
   constructor(message: string) {
     super(message);
@@ -131,6 +137,19 @@ export function protoPropertyToJsonSchema(property: ProtoProperty): JsonSchema {
 }
 
 function protoAnnotationToJsonSchema(annotation: ProtoPropertyAnnotation, path: string): JsonSchema {
+  if (annotation.type === "oneOf") {
+    if (!Array.isArray(annotation.oneOf) || annotation.oneOf.length === 0) {
+      throw new ProtoSchemaConversionError(`oneOf property "${path}" must define at least one branch.`);
+    }
+
+    const schema: JsonSchema = {};
+    copyDefined(schema, annotation, ["title", "description"]);
+    schema.oneOf = annotation.oneOf.map((branch, index) =>
+      protoAnnotationToJsonSchema(branch, `${path}.oneOf[${index}]`),
+    );
+    return schema;
+  }
+
   const schema: JsonSchema = {type: annotation.type as SchemaType};
   copyDefined(schema, annotation, SCALAR_KEYS);
 

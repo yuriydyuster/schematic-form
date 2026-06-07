@@ -701,6 +701,33 @@ const propertyAnnotationSchema: JsonSchema = {
       "required": ["type", "items"]
     },
     {
+      "title": "One Of",
+      "description": "Annotation for a oneOf branch selector property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["oneOf"]
+        },
+        "oneOf": {
+          "type": ["array"],
+          "title": "Variants",
+          "description": "Schema variants available for oneOf.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/propertyAnnotation",
+            "title": "Variant",
+            "description": "A single schema variant in the oneOf list."
+          }
+        }
+      },
+      "required": ["type", "oneOf"]
+    },
+    {
       "title": "Object",
       "description": "Annotation for an object property.",
       "type": ["object"],
@@ -941,6 +968,29 @@ export const kitchenSinkSchemaInitialValue = {
           enum: ["Product", "Pricing", "Support", "Partnership"],
         },
         uniqueItems: true,
+      },
+    },
+    {
+      key: "preferredContact",
+      required: false,
+      propertyAnnotation: {
+        type: "oneOf",
+        title: "Preferred contact method",
+        description: "Choose how we should contact this person.",
+        oneOf: [
+          {
+            type: "string",
+            title: "Email address",
+            description: "Use an email address for follow-up.",
+            format: "email",
+          },
+          {
+            type: "string",
+            title: "Website URL",
+            description: "Use a public profile or website URL for follow-up.",
+            format: "uri",
+          },
+        ],
       },
     },
     {

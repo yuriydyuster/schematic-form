@@ -167,3 +167,40 @@ npm run test:acceptance
 2. Generated preview JSON and preview form both demonstrate working branch behavior from proto-authored unions.
 3. Default demo payload visibly includes at least one `oneOf` example out-of-the-box.
 4. Unit, component, and browser acceptance tests cover conversion and UX regression risk.
+
+## Status (2026-06-07)
+
+- Completed.
+
+## Implementation Notes (2026-06-07)
+
+- Added proto `oneOf` annotation support in [protoSchema.ts](/Users/deuster/Documents/Projects/schematic-form/src/protoSchema.ts):
+- Introduced `ProtoOneOfAnnotation` and included it in `ProtoPropertyAnnotation`.
+- Implemented converter handling for `type: "oneOf"` that emits classic `oneOf` branches.
+- Enforced non-empty branch arrays with `ProtoSchemaConversionError`.
+- Ensured proto discriminator `type: "oneOf"` is not emitted into generated schema.
+
+- Extended proto authoring schema and demo initial value in [sampleSchemas.ts](/Users/deuster/Documents/Projects/schematic-form/src/sampleSchemas.ts):
+- Added a new `One Of` branch variant under `propertyAnnotationSchema.oneOf` with required `type` and `oneOf`.
+- Configured recursive branch items through `$ref: "#/$defs/propertyAnnotation"`.
+- Added `preferredContact` to `kitchenSinkSchemaInitialValue` using `type: "oneOf"` with two string-format branches.
+
+- Added converter and regression coverage in [protoSchema.test.ts](/Users/deuster/Documents/Projects/schematic-form/src/protoSchema.test.ts):
+- Conversion of oneOf annotation shape.
+- Assertion that generated oneOf wrapper omits `type`.
+- Error case for empty oneOf branch list.
+- Nested oneOf conversion with input immutability check.
+
+- Added UI-level proto schema tests in [SchematicForm.test.tsx](/Users/deuster/Documents/Projects/schematic-form/src/SchematicForm.test.tsx):
+- Initial proto value now asserts selected `One Of` row rendering and nested branch controls.
+- Added validation test for incomplete selected oneOf variant (`minItems` error on branches).
+
+- Updated browser acceptance in [schematic-form.acceptance.ts](/Users/deuster/Documents/Projects/schematic-form/tests/browser/schematic-form.acceptance.ts):
+- Updated default property count for added seeded oneOf row.
+- Added startup assertions for seeded `preferredContact` oneOf controls.
+- Extended preview assertions to confirm generated form branch selector and generated JSON includes `preferredContact` + `oneOf`.
+
+- Verification:
+- `npm test` passed.
+- `npm run lint` passed.
+- `npm run test:acceptance` passed.
