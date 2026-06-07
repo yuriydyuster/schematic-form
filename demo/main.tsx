@@ -86,7 +86,7 @@ function App() {
                     </Tabs.List>
                   </Tabs.ListContainer>
                   <Tabs.Panel id="form" className="demo-drawer__tabpanel">
-                    <SchematicForm key={previewKey} schema={convertedSchema} validationMode="hybrid" />
+                    <SchematicForm key={previewKey} schema={convertedSchema} validationMode="hybrid" persistence={{key: "schematic-form:new-schema-demo"}}/>
                   </Tabs.Panel>
                   <Tabs.Panel id="json" className="demo-drawer__tabpanel">
                     <Surface className="demo-json-surface">
