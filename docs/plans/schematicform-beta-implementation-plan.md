@@ -89,7 +89,7 @@ Beta public state must always include `data`, `isValid`, and `errors[]`.
 - True `anyOf` semantics and advanced branch/dependency logic
 - `dependencies`, `dependentRequired`, `dependentSchemas`, and `if`/`then`/`else`
 - Advanced `allOf` behavior
-- `$ref` resolution beyond local/simple cases
+- `$ref` resolution beyond same-document local references
 - Async business validation hook
 - `ajv-i18n` localization
 - semantic-release and npm publishing

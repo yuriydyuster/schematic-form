@@ -1,10 +1,10 @@
-import {render, screen, waitFor, within} from "@testing-library/react";
+import {act, fireEvent, render, screen, waitFor, within} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {describe, expect, test, vi} from "vitest";
 
 import {SchematicForm} from "./SchematicForm";
 import {createDraftPayload, createSchemaFingerprint} from "./persistence";
-import {kitchenSinkSchema} from "./sampleSchemas";
+import {kitchenSinkSchema, kitchenSinkSchemaInitialValue, kitchenSinkSchemaOld} from "./sampleSchemas";
 import type {JsonSchema, SchematicFormDraftStorage, SchematicFormState} from "./types";
 
 function expectBefore(first: Element, second: Element) {
@@ -31,9 +31,59 @@ function createMemoryStorage(): SchematicFormDraftStorage & {values: Map<string,
   };
 }
 
+function recursiveBranchSchema(): JsonSchema {
+  return {
+    type: "object",
+    title: "Recursive branches",
+    properties: {
+      nodes: {
+        type: "array",
+        title: "Nodes",
+        items: {
+          $ref: "#/$defs/node",
+          title: "Node",
+          description: "A recursive node.",
+        },
+      },
+    },
+    $defs: {
+      node: {
+        title: "Node",
+        oneOf: [
+          {
+            title: "Text Node",
+            type: "object",
+            properties: {
+              kind: {type: "string", enum: ["text"]},
+              label: {type: "string", title: "Label"},
+            },
+            required: ["kind", "label"],
+          },
+          {
+            title: "Group Node",
+            type: "object",
+            properties: {
+              kind: {type: "string", enum: ["group"]},
+              children: {
+                type: "array",
+                title: "Children",
+                items: {
+                  $ref: "#/$defs/node",
+                  title: "Child Node",
+                },
+              },
+            },
+            required: ["kind", "children"],
+          },
+        ],
+      },
+    },
+  };
+}
+
 describe("SchematicForm", () => {
   test("renders root schema title and description with Typography", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     const title = screen.getByRole("heading", {level: 2, name: "Project Intake"});
     const description = screen.getByText("Descriptions render above fields and every level is wrapped in a transparent surface.");
@@ -43,7 +93,7 @@ describe("SchematicForm", () => {
     expect(container.querySelector(".schematic-form__surface[data-sf-path=\"/\"]")).toContainElement(title);
   });
 
-  test("uses schema name before title for the root form label", () => {
+  test("uses schema title before name for the root form label", () => {
     const schema = {
       type: "object",
       name: "Schema name",
@@ -53,15 +103,15 @@ describe("SchematicForm", () => {
 
     render(<SchematicForm schema={schema} />);
 
-    expect(screen.getByRole("form", {name: "Schema name"})).toBeInTheDocument();
-    expect(screen.getByRole("heading", {level: 2, name: "Schema name"})).toBeInTheDocument();
-    expect(screen.queryByRole("heading", {level: 2, name: "Schema title"})).not.toBeInTheDocument();
+    expect(screen.getByRole("form", {name: "Schema title"})).toBeInTheDocument();
+    expect(screen.getByRole("heading", {level: 2, name: "Schema title"})).toBeInTheDocument();
+    expect(screen.queryByRole("heading", {level: 2, name: "Schema name"})).not.toBeInTheDocument();
   });
 
   test("renders display-only null fields and excludes them from data state", async () => {
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
 
-    render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+    render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     expect(screen.getByText("Scope")).toHaveClass("fieldset__legend");
     expect(screen.getByText("This block is display-only and will not be present in data.")).toHaveClass(
@@ -75,21 +125,24 @@ describe("SchematicForm", () => {
   });
 
   test("wraps nested object and array levels with full-width surfaces and fieldsets", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     expect(container.querySelectorAll(".schematic-form__surface").length).toBeGreaterThan(1);
     expect(container.querySelectorAll(".schematic-form__fieldset").length).toBeGreaterThan(1);
     expect(container.querySelectorAll(".schematic-form__field").length).toBeGreaterThan(1);
     for (const surface of container.querySelectorAll(".schematic-form__surface")) {
-      expect(surface).toHaveClass("rounded-lg", "border", "p-3");
+      expect(surface).toHaveClass("schematic-form__surface");
     }
 
     const owner = getSurface(container, "/owner");
     const ownerLegend = owner.querySelector(".fieldset__legend");
+    const ownerHeader = owner.querySelector(".schematic-form__object-header");
     const ownerDescription = within(owner).getByText("Nested objects render inside their own transparent surface.");
     expect(ownerLegend).not.toBeNull();
-    expect(ownerLegend?.parentElement).toHaveClass("schematic-form__fieldset");
-    expect(ownerDescription.closest(".schematic-form__field-group")).toBeInTheDocument();
+    expect(ownerLegend).toHaveClass("schematic-form__object-header");
+    expect(ownerHeader).toBe(ownerLegend);
+    expect(ownerHeader).toContainElement(within(owner).getByRole("button", {name: "Collapse Owner"}));
+    expect(ownerDescription.closest(".schematic-form__object-description")).toBeInTheDocument();
 
     const milestones = getSurface(container, "/milestones");
     const milestonesLegend = milestones.querySelector(".fieldset__legend");
@@ -100,16 +153,27 @@ describe("SchematicForm", () => {
   });
 
   test("wraps radio and checkbox groups in transparent surfaces", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     expect(screen.getByRole("radio", {name: "Internal"}).closest(".schematic-form__surface")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", {name: "Figma"}).closest(".schematic-form__surface")).toBeInTheDocument();
-    expect(container.querySelector(".schematic-form__form")).toHaveClass("flex", "flex-col", "gap-3");
-    expect(container.querySelector(".schematic-form__field-group")).toHaveClass("flex", "flex-col", "gap-0");
+    expect(container.querySelector(".schematic-form__form")).toHaveClass("schematic-form__form");
+    expect(container.querySelector(".schematic-form__field-group")).toHaveClass("schematic-form__field-group");
+  });
+
+  test("marks required group-style fields with the required label class", () => {
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
+
+    const payment = getSurface(container, "/payment");
+    expect(within(payment).getByText("Payment method")).toHaveClass("schematic-form__required-label");
+
+    const priority = container.querySelector('[data-sf-path="/priority"]');
+    expect(priority).toBeInTheDocument();
+    expect(within(priority as HTMLElement).getByText("Priority")).toHaveClass("schematic-form__required-label");
   });
 
   test("renders single input descriptions below the field control with HeroUI Description", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
     const field = container.querySelector('[data-sf-path="/projectName"]');
     expect(field).toBeInTheDocument();
 
@@ -156,8 +220,268 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Email").tagName).toBe("INPUT");
   });
 
+  test("renders formatted email and uri fields with InputGroup suffix icons", () => {
+    const schema = {
+      type: "object",
+      title: "Formatted fields",
+      properties: {
+        email: {
+          type: "string",
+          title: "Email",
+          format: "email",
+        },
+        website: {
+          type: "string",
+          title: "Website",
+          format: "uri",
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} />);
+
+    expect(screen.getByLabelText("Email")).toHaveAttribute("type", "email");
+    expect(screen.getByLabelText("Website")).toHaveAttribute("type", "url");
+    expect(container.querySelector('[data-sf-path="/email"] .input-group__suffix .schematic-form__field-icon')).toBeInTheDocument();
+    expect(container.querySelector('[data-sf-path="/website"] .input-group__suffix .schematic-form__field-icon')).toBeInTheDocument();
+  });
+
+  test("applies schema defaults across supported field types", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Defaults",
+      properties: {
+        shortText: {type: "string", title: "Short text", default: "Ada"},
+        longText: {type: "string", title: "Long text", maxLength: 256, default: "Long default"},
+        email: {type: "string", title: "Email", format: "email", default: "ada@example.com"},
+        website: {type: "string", title: "Website", format: "uri", default: "https://example.com"},
+        dueDate: {type: "string", title: "Due date", format: "date", default: "2026-06-05"},
+        dueTime: {type: "string", title: "Due time", format: "time", default: "09:30:00"},
+        amount: {type: "number", title: "Amount", default: 42.5},
+        priority: {type: "integer", title: "Priority", minimum: 1, maximum: 5, default: 3},
+        enabled: {type: "boolean", title: "Enabled", default: true},
+        status: {type: "string", title: "Status", enum: ["Draft", "Ready"], default: "Ready"},
+        tags: {
+          type: "array",
+          title: "Tags",
+          uniqueItems: true,
+          items: {type: "string", enum: ["One", "Two", "Three"]},
+          default: ["One", "Three"],
+        },
+        owner: {
+          type: "object",
+          title: "Owner",
+          properties: {
+            name: {type: "string", title: "Owner name", default: "Grace"},
+          },
+        },
+        milestones: {
+          type: "array",
+          title: "Milestones",
+          items: {
+            type: "object",
+            properties: {
+              label: {type: "string", title: "Milestone label"},
+            },
+          },
+          default: [{label: "Kickoff"}],
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+
+    expect(screen.getByLabelText("Short text")).toHaveValue("Ada");
+    expect(screen.getByLabelText("Long text")).toHaveValue("Long default");
+    expect(screen.getByLabelText("Email")).toHaveValue("ada@example.com");
+    expect(screen.getByLabelText("Website")).toHaveValue("https://example.com");
+    expect(container.querySelector('[data-sf-path="/amount"] input')).toHaveValue("42.5");
+    expect(screen.getByRole("switch", {name: "Enabled"})).toBeChecked();
+    expect(screen.getByRole("radio", {name: "Ready"})).toBeChecked();
+    expect(screen.getByRole("checkbox", {name: "One"})).toBeChecked();
+    expect(screen.getByRole("checkbox", {name: "Three"})).toBeChecked();
+    expect(screen.getByLabelText("Owner name")).toHaveValue("Grace");
+    expect(screen.getByLabelText("Milestone label")).toHaveValue("Kickoff");
+
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled());
+    expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({
+      shortText: "Ada",
+      longText: "Long default",
+      email: "ada@example.com",
+      website: "https://example.com",
+      dueDate: "2026-06-05",
+      dueTime: "09:30:00",
+      amount: 42.5,
+      priority: 3,
+      enabled: true,
+      status: "Ready",
+      tags: ["One", "Three"],
+      owner: {name: "Grace"},
+      milestones: [{label: "Kickoff"}],
+    });
+  });
+
+  test("hides required single-value enum fields and materializes their values", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Implicit enum fields",
+      required: ["kind", "version", "enabled", "referenced"],
+      properties: {
+        kind: {type: "string", title: "Kind", enum: ["fixed"]},
+        version: {type: "integer", title: "Version", enum: [1]},
+        enabled: {type: "boolean", title: "Enabled", enum: [true]},
+        referenced: {$ref: "#/$defs/referenced", title: "Referenced"},
+        optionalKind: {type: "string", title: "Optional kind", enum: ["optional"]},
+        name: {type: "string", title: "Name"},
+      },
+      $defs: {
+        referenced: {type: "string", enum: ["from-ref"]},
+      },
+    } satisfies JsonSchema;
+
+    render(
+      <SchematicForm
+        schema={schema}
+        defaultValue={{kind: "wrong", version: 2, enabled: false, referenced: "wrong-ref"}}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    expect(screen.queryByText("Kind")).not.toBeInTheDocument();
+    expect(screen.queryByText("Version")).not.toBeInTheDocument();
+    expect(screen.queryByText("Enabled")).not.toBeInTheDocument();
+    expect(screen.queryByText("Referenced")).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", {name: "optional"})).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled());
+    expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({
+      kind: "fixed",
+      version: 1,
+      enabled: true,
+      referenced: "from-ref",
+    });
+  });
+
+  test("keeps integer slider UI and data state aligned for required and optional fields", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Slider semantics",
+      required: ["requiredPriority"],
+      properties: {
+        requiredPriority: {
+          type: "integer",
+          title: "Required priority",
+          minimum: 1,
+          maximum: 5,
+        },
+        optionalScore: {
+          type: "integer",
+          title: "Optional score",
+          minimum: 1,
+          maximum: 5,
+        },
+        steppedScore: {
+          type: "integer",
+          title: "Stepped score",
+          minimum: 10,
+          maximum: 20,
+          multipleOf: 5,
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+
+    const requiredSlider = container.querySelector('[data-sf-path="/requiredPriority"] input');
+    const optionalSlider = container.querySelector('[data-sf-path="/optionalScore"] input');
+    const steppedSlider = container.querySelector('[data-sf-path="/steppedScore"] input');
+
+    expect(requiredSlider).toHaveAttribute("min", "1");
+    expect(requiredSlider).toHaveValue("1");
+    expect(optionalSlider).toHaveAttribute("min", "0");
+    expect(optionalSlider).toHaveValue("0");
+    expect(steppedSlider).toHaveAttribute("min", "5");
+    expect(steppedSlider).toHaveValue("5");
+    expect(container.querySelector('[data-sf-path="/optionalScore"]')).toHaveAttribute("data-sf-empty", "true");
+    expect(container.querySelector('[data-sf-path="/optionalScore"] .schematic-form__slider-output--empty')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
+    });
+
+    fireEvent.change(optionalSlider as HTMLInputElement, {target: {value: "1"}});
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1, optionalScore: 1});
+    });
+    expect(container.querySelector('[data-sf-path="/optionalScore"]')).not.toHaveAttribute("data-sf-empty");
+
+    fireEvent.change(optionalSlider as HTMLInputElement, {target: {value: "0"}});
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
+    });
+    expect(container.querySelector('[data-sf-path="/optionalScore"]')).toHaveAttribute("data-sf-empty", "true");
+
+    fireEvent.change(steppedSlider as HTMLInputElement, {target: {value: "10"}});
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1, steppedScore: 10});
+    });
+
+    fireEvent.click(screen.getByRole("button", {name: /clean/i}));
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredPriority: 1});
+    });
+    expect(container.querySelector('[data-sf-path="/optionalScore"] input')).toHaveValue("0");
+    expect(container.querySelector('[data-sf-path="/steppedScore"] input')).toHaveValue("5");
+  });
+
+  test("renders number sliders only when minimum, maximum, and multipleOf are set", () => {
+    const schema = {
+      type: "object",
+      title: "Numeric rendering",
+      properties: {
+        integerSlider: {
+          type: "integer",
+          title: "Integer slider",
+          minimum: 1,
+          maximum: 5,
+        },
+        numberSlider: {
+          type: "number",
+          title: "Number slider",
+          minimum: 0,
+          maximum: 1,
+          multipleOf: 0.1,
+        },
+        numberWithoutStep: {
+          type: "number",
+          title: "Number without step",
+          minimum: 0,
+          maximum: 1,
+        },
+        numberWithoutMaximum: {
+          type: "number",
+          title: "Number without maximum",
+          minimum: 0,
+          multipleOf: 0.1,
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} />);
+
+    expect(container.querySelector('[data-sf-path="/integerSlider"]')).toHaveClass("slider");
+    expect(container.querySelector('[data-sf-path="/numberSlider"]')).toHaveClass("slider");
+    expect(container.querySelector('[data-sf-path="/numberSlider"] input')).toHaveAttribute("step", "0.1");
+    expect(container.querySelector('[data-sf-path="/numberWithoutStep"]')).toHaveClass("number-field");
+    expect(container.querySelector('[data-sf-path="/numberWithoutMaximum"]')).toHaveClass("number-field");
+  });
+
   test("renders boolean fields as switches with labels before the control", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
     const field = container.querySelector('[data-sf-path="/requiresReview"]');
     expect(field).toBeInTheDocument();
 
@@ -167,14 +491,14 @@ describe("SchematicForm", () => {
     const row = field?.querySelector(".schematic-form__switch-row");
 
     expect(switchRoot).toBeInTheDocument();
-    expect(row).toHaveClass("flex", "items-center", "justify-between", "gap-2");
+    expect(row).toHaveClass("schematic-form__switch-row");
     expect(row).toContainElement(label);
     expect(row).toContainElement(switchRoot as HTMLElement);
     expectBefore(label, switchRoot as Element);
   });
 
   test("kitchen sink demo schema exposes every supported field layout", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     expect(screen.getByLabelText("Project name").tagName).toBe("INPUT");
     expect(screen.getByLabelText("Project summary").tagName).toBe("TEXTAREA");
@@ -182,9 +506,15 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Reference URL")).toHaveAttribute("type", "url");
     expect(screen.getByRole("switch", {name: "Requires review"})).toBeInTheDocument();
     expect(screen.getByRole("radio", {name: "Internal"})).toBeInTheDocument();
+    expect(within(container.querySelector('[data-sf-path="/confidence"]') as HTMLElement).getByText("Confidence")).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option status/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option channels/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option review tags/i})).toBeInTheDocument();
+    expect(container.querySelector('.schematic-form__surface[data-sf-path="/keywords"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Add Keyword"})).toBeInTheDocument();
+    expect(container.querySelector('.schematic-form__surface[data-sf-path="/labels"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Add Label"})).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", {name: "Discovery"})).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", {name: "Figma"})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option payment method/i})).toBeInTheDocument();
     expect(screen.getByRole("button", {name: /select an option fulfillment path/i})).toBeInTheDocument();
@@ -240,6 +570,86 @@ describe("SchematicForm", () => {
     });
   });
 
+  test("cleans optional empty array fields while preserving required empty arrays", async () => {
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Array cleanup",
+      required: ["requiredItems"],
+      properties: {
+        optionalItems: {
+          type: "array",
+          title: "Optional items",
+          items: {type: "string", title: "Optional item"},
+        },
+        requiredItems: {
+          type: "array",
+          title: "Required items",
+          items: {type: "string", title: "Required item"},
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(
+      <SchematicForm
+        defaultValue={{optionalItems: [], requiredItems: []}}
+        schema={schema}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredItems: []});
+    });
+  });
+
+  test("removes optional array fields when the last repeatable row is removed", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Array row cleanup",
+      required: ["requiredItems"],
+      properties: {
+        optionalItems: {
+          type: "array",
+          title: "Optional items",
+          items: {type: "string", title: "Optional item"},
+        },
+        requiredItems: {
+          type: "array",
+          title: "Required items",
+          items: {type: "string", title: "Required item"},
+        },
+      },
+    } satisfies JsonSchema;
+    const {container} = render(
+      <SchematicForm
+        defaultValue={{optionalItems: ["draft"], requiredItems: ["fixed"]}}
+        schema={schema}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    const optionalRow = container.querySelector('.schematic-form__array-row[data-sf-path="/optionalItems/0"]');
+    expect(optionalRow).toBeInTheDocument();
+    await user.click(within(optionalRow as HTMLElement).getByRole("button", {name: /remove/i}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).not.toHaveProperty("optionalItems");
+      expect(lastState?.data).toMatchObject({requiredItems: ["fixed"]});
+    });
+
+    const requiredRow = container.querySelector('.schematic-form__array-row[data-sf-path="/requiredItems/0"]');
+    expect(requiredRow).toBeInTheDocument();
+    await user.click(within(requiredRow as HTMLElement).getByRole("button", {name: /remove/i}));
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toEqual({requiredItems: []});
+    });
+  });
+
   test("restores uncontrolled drafts after remount", async () => {
     const user = userEvent.setup();
     const storage = createMemoryStorage();
@@ -286,7 +696,7 @@ describe("SchematicForm", () => {
       "kitchen-draft",
       JSON.stringify(
         createDraftPayload({
-          schemaFingerprint: createSchemaFingerprint(kitchenSinkSchema as unknown as JsonSchema),
+          schemaFingerprint: createSchemaFingerprint(kitchenSinkSchemaOld as unknown as JsonSchema),
           data: {
             channels: ["Email", "Web"],
             reviewTags: ["Accessibility", "Security"],
@@ -299,7 +709,7 @@ describe("SchematicForm", () => {
 
     render(
       <SchematicForm
-        schema={kitchenSinkSchema}
+        schema={kitchenSinkSchemaOld}
         persistence={{key: "kitchen-draft", storage, debounceMs: 0}}
         onStateChange={onStateChange}
       />,
@@ -415,7 +825,7 @@ describe("SchematicForm", () => {
     expect(screen.getByLabelText("Name")).toHaveValue("Controlled value");
   });
 
-  test("resets uncontrolled fields, branch choices, and validation UI", async () => {
+  test("cleans uncontrolled fields, branch choices, and validation UI", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const schema = {
@@ -461,7 +871,7 @@ describe("SchematicForm", () => {
       },
     } satisfies JsonSchema;
 
-    render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("Please review the highlighted fields.");
@@ -479,7 +889,9 @@ describe("SchematicForm", () => {
       });
     });
 
-    await user.click(screen.getByRole("button", {name: /reset/i}));
+    expect(screen.queryByRole("button", {name: /reset/i})).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: /clean/i}));
 
     expect(screen.getByLabelText("Name")).toHaveValue("");
     expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
@@ -492,20 +904,126 @@ describe("SchematicForm", () => {
     });
   });
 
+  test("infers branch selections from explicit initial values and resets back to them", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Initial branch form",
+      required: ["name", "payment"],
+      properties: {
+        name: {
+          type: "string",
+          title: "Name",
+          minLength: 1,
+        },
+        payment: {
+          title: "Payment method",
+          oneOf: [
+            {
+              type: "object",
+              title: "Card",
+              required: ["cardNumber"],
+              properties: {
+                cardNumber: {
+                  type: "string",
+                  title: "Card number",
+                },
+              },
+            },
+            {
+              type: "object",
+              title: "Bank transfer",
+              required: ["iban"],
+              properties: {
+                iban: {
+                  type: "string",
+                  title: "IBAN",
+                },
+              },
+            },
+          ],
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(
+      <SchematicForm
+        defaultValue={{name: "Ada", payment: {iban: "DE89"}}}
+        schema={schema}
+        onStateChange={onStateChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", {name: /bank transfer payment method/i})).toBeInTheDocument();
+    expect(screen.getByLabelText("IBAN")).toHaveValue("DE89");
+    expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Grace");
+    await user.click(screen.getByRole("button", {name: /bank transfer payment method/i}));
+    await user.click(await screen.findByRole("option", {name: "Card"}));
+    await user.type(await screen.findByLabelText("Card number"), "4242");
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({
+        name: "Grace",
+        payment: {cardNumber: "4242"},
+      });
+    });
+
+    await user.click(screen.getByRole("button", {name: /clean/i}));
+
+    expect(screen.getByLabelText("Name")).toHaveValue("");
+    expect(screen.queryByLabelText("IBAN")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Card number")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: /select an option payment method/i})).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: /reset/i}));
+
+    expect(screen.getByLabelText("Name")).toHaveValue("Ada");
+    expect(screen.getByRole("button", {name: /bank transfer payment method/i})).toBeInTheDocument();
+    expect(screen.getByLabelText("IBAN")).toHaveValue("DE89");
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toEqual({name: "Ada", payment: {iban: "DE89"}});
+    });
+  });
+
   test("replaces field descriptions with visible field errors", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
 
     const field = container.querySelector('[data-sf-path="/projectName"]');
     expect(field).toBeInTheDocument();
     expect(within(field as HTMLElement).queryByText("Short unformatted strings render as single-line inputs by default.")).not.toBeInTheDocument();
-    expect(within(field as HTMLElement).getByText(/must have required property 'projectName'/i)).toBeInTheDocument();
+    expect(within(field as HTMLElement).getByText(/must have required property 'projectName'/i).closest(".field-error")).toHaveClass(
+      "schematic-form__field-error",
+    );
+  });
+
+  test("marks invalid object surfaces with schematic-only invalid attribute", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
+
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const owner = getSurface(container, "/owner");
+    expect(owner).toHaveAttribute("data-sf-invalid", "true");
+    expect(owner).not.toHaveAttribute("data-invalid");
+
+    const websiteField = container.querySelector('[data-sf-path="/owner/website"]');
+    expect(websiteField).toBeInTheDocument();
+    expect(within(websiteField as HTMLElement).queryByText(/must /i)).not.toBeInTheDocument();
+    expect(within(websiteField as HTMLElement).getByText("Nested URI fields use the same formatted string layout.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Owner website")).not.toHaveAttribute("aria-invalid", "true");
   });
 
   test("renders complex field descriptions below labels inside transparent surfaces", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
     const channels = container.querySelector('.schematic-form__field[data-sf-path="/channels"]');
     expect(channels).toBeInTheDocument();
     expect(container.querySelector('.schematic-form__surface[data-sf-path="/channels"]')).not.toBeInTheDocument();
@@ -538,7 +1056,7 @@ describe("SchematicForm", () => {
       const label = within(surface).getByText(item.label);
       const description = within(surface).getByText(item.description);
 
-      expect(surface).toHaveClass("surface--transparent", "rounded-lg", "border", "p-3");
+      expect(surface).toHaveClass("surface--transparent", "schematic-form__surface");
       expect(label).toHaveClass("fieldset__legend");
       expect(description).toHaveClass("description", "schematic-form__description");
       expectBefore(label, description);
@@ -549,7 +1067,7 @@ describe("SchematicForm", () => {
     const {container} = render(
       <SchematicForm
         defaultValue={{channels: ["Email", "Web"], status: "Draft"}}
-        schema={kitchenSinkSchema}
+        schema={kitchenSinkSchemaOld}
       />,
     );
     const enumCases = [
@@ -574,7 +1092,7 @@ describe("SchematicForm", () => {
       const trigger = field?.querySelector(".select__trigger");
       const description = within(field as HTMLElement).getByText(item.description);
 
-      expect(field).toHaveClass("flex", "flex-col", "gap-1");
+      expect(field).toHaveClass("schematic-form__field");
       expect(trigger).toBeInTheDocument();
       expect(trigger).toHaveClass("select__trigger", "select__trigger--full-width");
       expect(description).toHaveClass("description", "schematic-form__description");
@@ -586,7 +1104,7 @@ describe("SchematicForm", () => {
     const branchTrigger = branchField?.querySelector(".select__trigger");
     const branchDescription = within(branch).getByText("Branching uses a dropdown and anyOf is intentionally treated as oneOf in Beta.");
 
-    expect(branchField).toHaveClass("flex", "flex-col", "gap-1");
+    expect(branchField).toHaveClass("schematic-form__field");
     expect(branchTrigger).toBeInTheDocument();
     expect(branchDescription).toHaveClass("description", "schematic-form__description");
     expect(branchDescription.closest(".schematic-form__branch-group")).toBeInTheDocument();
@@ -602,7 +1120,7 @@ describe("SchematicForm", () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
 
-    render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+    render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: /select an option channels/i}));
     await user.click(await screen.findByRole("option", {name: "Email"}));
@@ -613,16 +1131,39 @@ describe("SchematicForm", () => {
     });
   });
 
+  test("renders non-unique enum string arrays as repeatable select rows", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: "Add Label"}));
+
+    const labelRow = container.querySelector('.schematic-form__array-row[data-sf-path="/labels/0"]');
+    expect(labelRow).toBeInTheDocument();
+    expect(within(labelRow as HTMLElement).queryByRole("checkbox", {name: "Discovery"})).not.toBeInTheDocument();
+
+    const trigger = within(labelRow as HTMLElement).getByRole("button", {name: /select an option label #1/i});
+    expect(trigger.closest(".select")).toBeInTheDocument();
+
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", {name: "Discovery"}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).toMatchObject({labels: ["Discovery"]});
+    });
+  });
+
   test("leaves oneOf and anyOf selectors empty until a default or user selection exists", async () => {
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     expect(screen.getByRole("button", {name: /select an option payment method/i})).toBeInTheDocument();
     expect(screen.queryByLabelText(/card number/i)).not.toBeInTheDocument();
 
     const branch = container.querySelector('.schematic-form__branch[data-sf-path="/payment"]');
     expect(branch).toBeInTheDocument();
-    expect(branch).toHaveClass("surface--transparent", "rounded-lg", "border", "p-3", "flex", "flex-col", "gap-0");
+    expect(branch).toHaveClass("surface--transparent", "schematic-form__surface", "schematic-form__branch");
     expect(within(branch as HTMLElement).getByText("Payment method")).toHaveClass("fieldset__legend");
     const anyOfSelector = within(branch as HTMLElement).getByRole("button", {name: /select an option payment method/i});
     const oneOfSelector = screen.getByRole("button", {name: /select an option fulfillment path/i});
@@ -640,7 +1181,7 @@ describe("SchematicForm", () => {
   test("shows branch selector errors inside the branch surface and validates only the selected branch", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
 
@@ -665,7 +1206,7 @@ describe("SchematicForm", () => {
     expect(within(branch).queryByText(/must match exactly one schema/i)).not.toBeInTheDocument();
     expect(within(branch).getByText(/must have required property 'cardNumber'/i)).toBeInTheDocument();
     const branchGroup = branch.querySelector(".schematic-form__branch-group");
-    expect(branchGroup).toHaveClass("space-y-4");
+    expect(branchGroup).toHaveClass("schematic-form__branch-group");
     expect(branchGroup?.children[0]).toHaveClass("schematic-form__description");
     expect(branchGroup?.children[1]).toHaveClass("schematic-form__field");
     expect(branchGroup?.children[2]).toHaveClass("schematic-form__fieldset");
@@ -732,6 +1273,74 @@ describe("SchematicForm", () => {
     await waitFor(() => expect(screen.getByLabelText("Card number")).toHaveValue("411111"));
   });
 
+  test("reuses compatible object values in data state when switching to a cached branch variant", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      title: "Property annotation",
+      properties: {
+        annotation: {
+          title: "Property type",
+          oneOf: [
+            {
+              type: "object",
+              title: "String",
+              required: ["type"],
+              properties: {
+                type: {type: "string", enum: ["string"]},
+                title: {type: "string", title: "Title"},
+                description: {type: "string", title: "Description"},
+                maxLength: {type: "integer", title: "Maximum Length"},
+              },
+            },
+            {
+              type: "object",
+              title: "Number",
+              required: ["type"],
+              properties: {
+                type: {type: "string", enum: ["number"]},
+                title: {type: "string", title: "Title"},
+                description: {type: "string", title: "Description"},
+                maximum: {type: "number", title: "Maximum"},
+              },
+            },
+          ],
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "Number"}));
+
+    await user.click(screen.getByRole("button", {name: /number property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
+    await user.type(screen.getByLabelText("Title"), "Shared title");
+    await user.type(screen.getByLabelText("Description"), "Shared description");
+    fireEvent.change(container.querySelector('[data-sf-path="/annotation/maxLength"] input') as HTMLInputElement, {
+      target: {value: "42"},
+    });
+
+    await user.click(screen.getByRole("button", {name: /string property type/i}));
+    await user.click(await screen.findByRole("option", {name: "Number"}));
+
+    await waitFor(() => {
+      const latestData = onStateChange.mock.calls.at(-1)?.[0].data;
+      expect(latestData).toEqual({
+        annotation: {
+          type: "number",
+          title: "Shared title",
+          description: "Shared description",
+        },
+      });
+    });
+    expect(screen.getByLabelText("Title")).toHaveValue("Shared title");
+    expect(screen.getByLabelText("Description")).toHaveValue("Shared description");
+    expect(container.querySelector('[data-sf-path="/annotation/maximum"] input')).toHaveValue("");
+  });
+
   test("uses explicit branch defaults to select and render a nested oneOf structure", () => {
     const schema = {
       type: "object",
@@ -775,7 +1384,7 @@ describe("SchematicForm", () => {
     expect(branch).toHaveClass("schematic-form__branch");
     expect(within(branch).getByText("Delivery type")).toHaveClass("fieldset__legend");
     const branchGroup = branch.querySelector(".schematic-form__branch-group");
-    expect(branchGroup).toHaveClass("space-y-4");
+    expect(branchGroup).toHaveClass("schematic-form__branch-group");
     expect(branchGroup?.children[0]).toHaveClass("schematic-form__field");
     expect(branchGroup?.children[1]).toHaveClass("schematic-form__fieldset");
     expect(branch.querySelectorAll(".fieldset__legend")[1]).toHaveTextContent("Pickup");
@@ -786,7 +1395,7 @@ describe("SchematicForm", () => {
   test("adds array rows with an Add label button", async () => {
     const user = userEvent.setup();
 
-    render(<SchematicForm schema={kitchenSinkSchema} />);
+    render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     await user.click(screen.getByRole("button", {name: /add milestone/i}));
 
@@ -795,10 +1404,274 @@ describe("SchematicForm", () => {
     expect(screen.getByRole("button", {name: /remove/i})).toBeInTheDocument();
   });
 
-  test("renders mixed oneOf array items in one row surface and preserves rows when switching branches", async () => {
+  test("renders local $ref array items with sibling title and description", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+
+    expect(screen.getByRole("heading", {level: 2, name: "SchematicForm Builder"})).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
+    expect(screen.queryByLabelText("JSON Schema Draft")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Type")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", {name: /add property/i})).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(onStateChange.mock.calls.at(-1)?.[0].data).toMatchObject({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+      });
+    });
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+
+    const item = getSurface(container, "/properties/0");
+    expect(within(item).getByText("Property #1")).toBeInTheDocument();
+    expect(within(item).getByText("A single recursive property definition.")).toBeInTheDocument();
+    expect(within(item).getByLabelText("Key")).toBeInTheDocument();
+  });
+
+  test("renders initial proto-schema branch values as selected and expanded controls", () => {
+    const {container} = render(<SchematicForm defaultValue={kitchenSinkSchemaInitialValue} schema={kitchenSinkSchema} />);
+
+    const fullName = getSurface(container, "/properties/0");
+    expect(within(fullName).getByLabelText("Key")).toHaveValue("fullName");
+    expect(within(fullName).getByRole("button", {name: /string property type/i})).toBeInTheDocument();
+    expect(container.querySelector('[data-sf-path="/properties/0/propertyAnnotation/minLength"] input')).toHaveValue("2");
+
+    const company = getSurface(container, "/properties/3");
+    expect(container.querySelector('[data-sf-path="/properties/3/key"] input')).toHaveValue("company");
+    expect(within(company).getByRole("button", {name: /object property type/i})).toBeInTheDocument();
+    expect(within(getSurface(container, "/properties/3/propertyAnnotation/properties")).getByRole("button", {name: /add property/i})).toBeInTheDocument();
+
+    const topics = getSurface(container, "/properties/4");
+    expect(container.querySelector('[data-sf-path="/properties/4/key"] input')).toHaveValue("topics");
+    expect(within(topics).getByRole("button", {name: /array property type/i})).toBeInTheDocument();
+    expect(within(getSurface(container, "/properties/4/propertyAnnotation/items")).getByRole("button", {name: /string items/i})).toBeInTheDocument();
+  });
+
+  test("validates an added local ref item that keeps its nested branch unselected", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+
+    const item = getSurface(container, "/properties/0");
+    expect(within(item).getByRole("button", {name: /select an option property type/i})).toBeInTheDocument();
+    expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
+
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    await waitFor(() => {
+      expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
+      expect(within(item).getByText(/must have required property 'propertyAnnotation'/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
+  });
+
+  test("replaces local ref array descriptions with schema-level errors", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    const schemaArray = getSurface(container, "/properties");
+    expect(within(schemaArray).getByText("Array of property definitions used to build the form.")).toHaveClass(
+      "schematic-form__description",
+    );
+
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    expect(within(schemaArray).queryByText("Array of property definitions used to build the form.")).not.toBeInTheDocument();
+    expect(within(schemaArray).getByText(/must NOT have fewer than 1 items/i).closest("[data-slot='schema-error-message']")).toHaveClass(
+      "schematic-form__error-message",
+    );
+  });
+
+  test("selecting a property type branch for an added local ref item does not toggle its required switch", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+    expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
+
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
+
+    expect(within(item).getByLabelText("Default")).toBeInTheDocument();
+    await waitFor(() => {
+      const latestData = onStateChange.mock.calls.at(-1)?.[0].data as {properties?: Array<{propertyAnnotation?: {type?: string}}>};
+      expect(latestData.properties?.[0]).toMatchObject({
+        propertyAnnotation: {type: "string"},
+      });
+    });
+    expect(within(item).getByRole("switch", {name: "Required"})).not.toBeChecked();
+  });
+
+  test("shows field errors after submitting an incomplete selected local ref branch", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "String"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    expect(screen.queryByText(/Schema could not be compiled/i)).not.toBeInTheDocument();
+    expect(within(item).queryByText("Property name used as the object key.")).not.toBeInTheDocument();
+    expect(within(item).getByText(/must have required property 'key'/i)).toBeInTheDocument();
+  });
+
+  test("renders nested object annotation properties with proto-schema row shape", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+
+    await user.click(screen.getByRole("button", {name: /add property/i}));
+    const item = getSurface(container, "/properties/0");
+
+    await user.click(within(item).getByRole("button", {name: /select an option property type/i}));
+    await user.click(await screen.findByRole("option", {name: "Object"}));
+
+    expect(within(item).queryByLabelText("Default")).not.toBeInTheDocument();
+    const nestedProperties = getSurface(container, "/properties/0/propertyAnnotation/properties");
+    expect(within(nestedProperties).getByRole("button", {name: /add property/i})).toBeInTheDocument();
+
+    await user.click(within(nestedProperties).getByRole("button", {name: /add property/i}));
+
+    const nestedItem = getSurface(container, "/properties/0/propertyAnnotation/properties/0");
+    expect(within(nestedItem).getByLabelText("Key")).toBeInTheDocument();
+    expect(within(nestedItem).getByRole("switch", {name: "Required"})).toBeInTheDocument();
+    expect(within(nestedItem).getByRole("button", {name: /select an option property type/i})).toBeInTheDocument();
+  });
+
+  test("renders local $ref nodes with sibling title and description", async () => {
+    const user = userEvent.setup();
+    const schema = {
+      type: "object",
+      title: "Referenced fields",
+      properties: {
+        rows: {
+          type: "array",
+          title: "Rows",
+          items: {
+            $ref: "#/$defs/row",
+            title: "Local row",
+            description: "Local row description.",
+          },
+        },
+      },
+      $defs: {
+        row: {
+          type: "object",
+          title: "Base row",
+          description: "Base row description.",
+          properties: {
+            name: {type: "string", title: "Name"},
+          },
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} />);
+
+    await user.click(screen.getByRole("button", {name: /add local row/i}));
+
+    const item = getSurface(container, "/rows/0");
+    expect(within(item).getByText("Local row #1")).toBeInTheDocument();
+    expect(within(item).getByText("Local row description.")).toBeInTheDocument();
+    expect(within(item).getByLabelText("Name")).toBeInTheDocument();
+  });
+
+  test("adds nested recursive rows through local refs without expanding infinitely", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /select an option node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Group Node"}));
+
+    await waitFor(() => {
+      expect(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /add child node/i})).toBeInTheDocument();
+    });
+
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /add child node/i}));
+
+    await waitFor(() => {
+      const nestedItem = getSurface(container, "/nodes/0/children/0");
+      expect(within(nestedItem).getByRole("button", {name: /select an option child node #1/i})).toBeInTheDocument();
+    });
+    const rowCount = container.querySelectorAll(".schematic-form__array-row").length;
+    expect(rowCount).toBeGreaterThanOrEqual(2);
+    expect(rowCount).toBeLessThan(5);
+  });
+
+  test("validates selected recursive ref branches without sibling branch noise", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /select an option node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Text Node"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const row = getSurface(container, "/nodes/0");
+    await waitFor(() => {
+      expect(within(row).getAllByText(/must have required property 'label'/i)).toHaveLength(1);
+    });
+    expect(within(row).queryByText(/must be object/i)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/must match exactly one schema in oneOf/i)).not.toBeInTheDocument();
+  });
+
+  test("shows one concise error for an unselected recursive branch", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    const row = getSurface(container, "/nodes/0");
+    await waitFor(() => {
+      expect(within(row).getAllByText(/must match exactly one schema in oneOf/i)).toHaveLength(1);
+    });
+    expect(within(row).queryByText(/must be object/i)).not.toBeInTheDocument();
+  });
+
+  test("validates nested selected recursive ref branches without sibling branch noise", async () => {
+    const user = userEvent.setup();
+    const {container} = render(<SchematicForm schema={recursiveBranchSchema()} />);
+
+    await user.click(screen.getByRole("button", {name: /add node/i}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /select an option node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Group Node"}));
+    await user.click(within(getSurface(container, "/nodes/0")).getByRole("button", {name: /add child node/i}));
+    const child = getSurface(container, "/nodes/0/children/0");
+    await user.click(within(child).getByRole("button", {name: /select an option child node #1/i}));
+    await user.click(await screen.findByRole("option", {name: "Text Node"}));
+    await user.click(screen.getByRole("button", {name: "Submit"}));
+
+    await waitFor(() => {
+      expect(within(child).getAllByText(/must have required property 'label'/i)).toHaveLength(1);
+    });
+    expect(within(child).queryByText(/must be object/i)).not.toBeInTheDocument();
+    expect(within(child).queryByText(/must match exactly one schema in oneOf/i)).not.toBeInTheDocument();
+  });
+
+  test("uses exact property keys and generic item add labels for untitled arrays", () => {
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
+
+    const untitledMixedItems = getSurface(container, "/untitledMixedItems");
+
+    expect(within(untitledMixedItems).getByText("untitledMixedItems")).toHaveClass("fieldset__legend");
+    expect(within(untitledMixedItems).getByRole("button", {name: /^add item$/i})).toBeInTheDocument();
+    expect(within(untitledMixedItems).queryByText("Untitled Mixed Items")).not.toBeInTheDocument();
+  });
+
+  test("renders mixed oneOf array items in one row surface and preserves rows when switching branches", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
 
@@ -806,13 +1679,13 @@ describe("SchematicForm", () => {
     const item = getSurface(container, "/mixedItems/0");
     expect(item.children[0]).toHaveClass("schematic-form__fieldset");
     expect(item.children[0]).not.toHaveClass("schematic-form__branch");
-    expect(within(item).getByRole("button", {name: /select an option mixed item #1/i})).toBeInTheDocument();
-    expect(within(item).queryByLabelText("Label")).not.toBeInTheDocument();
+    expect(within(item).getByRole("button", {name: /object mixed item #1/i})).toBeInTheDocument();
+    expect(within(item).getByLabelText("Label")).toBeInTheDocument();
     const branchGroup = item.querySelector(".schematic-form__branch-group");
-    expect(branchGroup).toHaveClass("space-y-4");
-    expect(item.querySelector(".schematic-form__row-actions")).toHaveClass("mt-4");
+    expect(branchGroup).toHaveClass("schematic-form__branch-group");
+    expect(item.querySelector(".schematic-form__row-actions")).toHaveClass("schematic-form__row-actions");
 
-    await user.click(within(item).getByRole("button", {name: /select an option mixed item #1/i}));
+    await user.click(within(item).getByRole("button", {name: /mixed item #1/i}));
     await user.click(await screen.findByRole("option", {name: "Enum string"}));
 
     await waitFor(() => {
@@ -846,10 +1719,10 @@ describe("SchematicForm", () => {
   test("validates mixed oneOf array rows against their own selected branches", async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} onStateChange={onStateChange} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} onStateChange={onStateChange} />);
 
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
-    await user.click(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /select an option mixed item #1/i}));
+    await user.click(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /mixed item #1/i}));
     await user.click(await screen.findByRole("option", {name: "Boolean"}));
 
     await waitFor(() => {
@@ -858,50 +1731,48 @@ describe("SchematicForm", () => {
     });
 
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
-    await user.click(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /select an option mixed item #2/i}));
-    await user.click(await screen.findByRole("option", {name: "Object"}));
 
     await waitFor(() => {
       const lastState = onStateChange.mock.calls.at(-1)?.[0];
       const errors = lastState?.errors.join("\n") ?? "";
-      expect(lastState?.data).toMatchObject({mixedItems: [false, {}]});
-      expect(errors).toMatch(/mixedItems\.1\.label: must have required property 'label'/i);
+      expect(lastState?.data).toMatchObject({mixedItems: [false, undefined]});
+      expect(errors).toMatch(/mixedItems\.1: must be object/i);
       expect(errors).not.toMatch(/mixedItems\.1: must be boolean/i);
     });
   });
 
   test("rebases mixed oneOf array branch selections when rows move", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
     await user.click(screen.getByRole("button", {name: /add mixed item/i}));
 
     const firstItem = getSurface(container, "/mixedItems/0");
-    await user.click(within(firstItem).getByRole("button", {name: /select an option mixed item #1/i}));
+    await user.click(within(firstItem).getByRole("button", {name: /mixed item #1/i}));
     await user.click(await screen.findByRole("option", {name: "Enum string"}));
 
     await waitFor(() => {
       expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /enum string mixed item #1/i})).toBeInTheDocument();
-      expect(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /select an option mixed item #2/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /mixed item #2/i})).toBeInTheDocument();
     });
 
     await user.click(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /move down/i}));
 
     await waitFor(() => {
-      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /select an option mixed item #1/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /mixed item #1/i})).toBeInTheDocument();
       expect(within(getSurface(container, "/mixedItems/1")).getByRole("button", {name: /enum string mixed item #2/i})).toBeInTheDocument();
     });
   });
 
-  test("keeps persisted empty mixed oneOf array items unselected after remount", async () => {
+  test("applies default mixed oneOf branch after remount when persisted selection is null", async () => {
     const storage = createMemoryStorage();
     const onStateChange = vi.fn<(state: SchematicFormState) => void>();
     storage.setItem(
       "empty-mixed-row",
       JSON.stringify(
         createDraftPayload({
-          schemaFingerprint: createSchemaFingerprint(kitchenSinkSchema as unknown as JsonSchema),
+          schemaFingerprint: createSchemaFingerprint(kitchenSinkSchemaOld as unknown as JsonSchema),
           data: {
             mixedItems: [null],
           },
@@ -915,15 +1786,15 @@ describe("SchematicForm", () => {
 
     const {container} = render(
       <SchematicForm
-        schema={kitchenSinkSchema}
+        schema={kitchenSinkSchemaOld}
         persistence={{key: "empty-mixed-row", storage, debounceMs: 0}}
         onStateChange={onStateChange}
       />,
     );
 
     await waitFor(() => {
-      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /select an option mixed item #1/i})).toBeInTheDocument();
-      expect(within(getSurface(container, "/mixedItems/0")).queryByLabelText("Label")).not.toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/0")).getByRole("button", {name: /object mixed item #1/i})).toBeInTheDocument();
+      expect(within(getSurface(container, "/mixedItems/0")).getByLabelText("Label")).toBeInTheDocument();
     });
 
     await waitFor(() => {
@@ -933,8 +1804,43 @@ describe("SchematicForm", () => {
     });
   });
 
-  test("falls back to indexed Item labels for array items without titles", async () => {
-    const user = userEvent.setup();
+  test("uses property keys for untitled object, radio, and checkbox group labels", () => {
+    const schema = {
+      type: "object",
+      title: "Key labels",
+      properties: {
+        contactDetails: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+            },
+          },
+        },
+        deliveryChoice: {
+          type: "string",
+          enum: ["Pickup", "Ship"],
+        },
+        reviewTags: {
+          type: "array",
+          uniqueItems: true,
+          items: {
+            type: "string",
+            enum: ["Design", "Security"],
+          },
+        },
+      },
+    } satisfies JsonSchema;
+
+    render(<SchematicForm schema={schema} />);
+
+    expect(screen.getByText("contactDetails").closest(".fieldset__legend")).toBeInTheDocument();
+    expect(screen.getByText("deliveryChoice")).toHaveClass("fieldset__legend");
+    expect(screen.getByText("reviewTags")).toHaveClass("fieldset__legend");
+    expect(screen.getByLabelText("name")).toBeInTheDocument();
+  });
+
+  test("keeps synthetic array item legends and omits only untitled nested branch variant labels", () => {
     const schema = {
       type: "object",
       title: "Fallback arrays",
@@ -947,32 +1853,69 @@ describe("SchematicForm", () => {
             properties: {
               value: {
                 type: "string",
-                title: "Value",
                 description: "Value entered for this row.",
               },
             },
           },
         },
+        toggles: {
+          type: "array",
+          items: {
+            default: false,
+            oneOf: [
+              {
+                type: "boolean",
+              },
+              {
+                type: "string",
+              },
+            ],
+          },
+        },
+        choices: {
+          type: "array",
+          items: {
+            default: {value: ""},
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  value: {
+                    type: "string",
+                  },
+                },
+              },
+            ],
+          },
+        },
       },
     } satisfies JsonSchema;
 
-    render(<SchematicForm schema={schema} />);
+    const {container} = render(<SchematicForm schema={schema} defaultValue={{rows: [{}], toggles: [false], choices: [{value: ""}]}} />);
 
-    await user.click(screen.getByRole("button", {name: /add/i}));
+    const objectItem = getSurface(container, "/rows/0");
+    expect(within(objectItem).getByText("Item #1")).toBeInTheDocument();
+    expect(within(objectItem).getByLabelText("value")).toBeInTheDocument();
 
-    expect(screen.getByText("Item #1")).toBeInTheDocument();
+    const choiceBranch = getSurface(container, "/choices/0");
+    expect(Array.from(choiceBranch.querySelectorAll(".fieldset__legend")).map((legend) => legend.textContent)).toEqual(["Item #1"]);
+    expect(within(choiceBranch).getByLabelText("value")).toBeInTheDocument();
+
+    const toggleBranch = getSurface(container, "/toggles/0");
+    expect(within(toggleBranch).getByText("Item #1")).toBeInTheDocument();
+    expect(within(toggleBranch).getByText("Off")).toBeInTheDocument();
   });
 
   test("renders array item buttons inside the item surface with Gravity icons and labels", async () => {
     const user = userEvent.setup();
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     await user.click(screen.getByRole("button", {name: /add milestone/i}));
 
     const itemSurface = getSurface(container, "/milestones/0");
     const actions = itemSurface.querySelector(".schematic-form__row-actions");
     expect(actions).toBeInTheDocument();
-    expect(actions).toHaveClass("mt-4", "grid", "grid-cols-3", "gap-1");
+    expect(actions).toHaveClass("schematic-form__row-actions");
 
     for (const name of [/move up/i, /move down/i]) {
       const button = within(actions as HTMLElement).getByRole("button", {name});
@@ -989,28 +1932,82 @@ describe("SchematicForm", () => {
     expect(removeButton).toHaveTextContent(/remove/i);
   });
 
-  test("renders reset and submit as full-width form actions", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+  test("renders clean and submit as full-width form actions without explicit initial values", () => {
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     const actions = container.querySelector(".schematic-form__form-actions");
     expect(actions).toBeInTheDocument();
-    expect(actions).toHaveClass("grid", "grid-cols-2", "gap-1");
+    expect(actions).toHaveClass("schematic-form__form-actions");
 
+    const cleanButton = within(actions as HTMLElement).getByRole("button", {name: /clean/i});
+    const submitButton = within(actions as HTMLElement).getByRole("button", {name: "Submit"});
+
+    expect(within(actions as HTMLElement).queryByRole("button", {name: /reset/i})).not.toBeInTheDocument();
+    expect(cleanButton).toHaveClass("button--secondary", "button--full-width");
+    expect(cleanButton).not.toHaveClass("button--icon-only");
+    expect(cleanButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
+    expect(cleanButton).toHaveTextContent("Clean");
+    expect(submitButton).toHaveClass("button--full-width");
+    expect(submitButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
+    expectBefore(cleanButton, submitButton);
+  });
+
+  test("renders reset between clean and submit when explicit initial values are set", () => {
+    const {container} = render(<SchematicForm defaultValue={{projectName: "Ada"}} schema={kitchenSinkSchemaOld} />);
+
+    const actions = container.querySelector(".schematic-form__form-actions");
+    expect(actions).toBeInTheDocument();
+
+    const cleanButton = within(actions as HTMLElement).getByRole("button", {name: /clean/i});
     const resetButton = within(actions as HTMLElement).getByRole("button", {name: /reset/i});
     const submitButton = within(actions as HTMLElement).getByRole("button", {name: "Submit"});
 
+    expect(cleanButton).toHaveClass("button--secondary", "button--full-width");
     expect(resetButton).toHaveClass("button--secondary", "button--full-width");
-    expect(resetButton).not.toHaveClass("button--icon-only");
     expect(resetButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
-    expect(resetButton).toHaveTextContent("Reset");
-    expect(submitButton).toHaveClass("button--full-width");
+    expectBefore(cleanButton, resetButton);
     expectBefore(resetButton, submitButton);
+  });
+
+  test("marks submit button pending while async submit is running", async () => {
+    const user = userEvent.setup();
+    let resolveSubmit: () => void = () => undefined;
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+    const schema = {
+      type: "object",
+      title: "Async submit",
+      properties: {
+        name: {type: "string", title: "Name", default: "Ada"},
+      },
+    } satisfies JsonSchema;
+
+    render(<SchematicForm schema={schema} onSubmit={onSubmit} />);
+
+    const submitButton = screen.getByRole("button", {name: "Submit"});
+    await user.click(submitButton);
+
+    expect(onSubmit).toHaveBeenCalled();
+    await waitFor(() => expect(submitButton).toHaveAttribute("data-pending"));
+    expect(submitButton.querySelector(".spinner")).toBeInTheDocument();
+    expect(submitButton.querySelector(".schematic-form__button-icon")).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSubmit();
+    });
+
+    await waitFor(() => expect(submitButton).not.toHaveAttribute("data-pending"));
+    expect(submitButton.querySelector(".schematic-form__button-icon")).toBeInTheDocument();
   });
 
   test("shows required validation errors after submit", async () => {
     const user = userEvent.setup();
 
-    render(<SchematicForm schema={kitchenSinkSchema} />);
+    render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     await user.click(screen.getByRole("button", {name: "Submit"}));
 
@@ -1019,7 +2016,7 @@ describe("SchematicForm", () => {
   });
 
   test("renders date and time formats with HeroUI components", () => {
-    const {container} = render(<SchematicForm schema={kitchenSinkSchema} />);
+    const {container} = render(<SchematicForm schema={kitchenSinkSchemaOld} />);
 
     expect(container.querySelectorAll(".date-picker").length).toBeGreaterThanOrEqual(2);
     expect(container.querySelector(".time-field")).toBeInTheDocument();

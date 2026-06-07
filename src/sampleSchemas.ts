@@ -1,6 +1,7 @@
+import {JSON_SCHEMA_2020_12, type ProtoSchemaObject} from "./protoSchema";
 import type {JsonSchema} from "./types";
 
-export const kitchenSinkSchema = {
+export const kitchenSinkSchemaOld = {
   type: "object",
   title: "Project Intake",
   description: "Descriptions render above fields and every level is wrapped in a transparent surface.",
@@ -13,9 +14,12 @@ export const kitchenSinkSchema = {
     "referenceUrl",
     "requiresReview",
     "priority",
+    "confidence",
     "audience",
     "status",
     "channels",
+    "keywords",
+    "labels",
     "tools",
     "reviewTags",
     "budget",
@@ -26,6 +30,7 @@ export const kitchenSinkSchema = {
     "payment",
     "fulfillment",
     "mixedItems",
+    "untitledMixedItems",
     "milestones",
   ],
   properties: {
@@ -71,6 +76,13 @@ export const kitchenSinkSchema = {
       minimum: 1,
       maximum: 5,
     },
+    confidence: {
+      type: "integer",
+      title: "Confidence",
+      description: "Optional integer sliders include an unset position before the minimum and omit that field from data.",
+      minimum: 1,
+      maximum: 5,
+    },
     audience: {
       type: "string",
       title: "Audience",
@@ -93,6 +105,28 @@ export const kitchenSinkSchema = {
         title: "Channel",
         description: "A delivery channel for the project.",
         enum: ["Email", "Web", "Mobile", "Retail", "Partner", "Events"],
+      },
+    },
+    keywords: {
+      type: "array",
+      title: "Keywords",
+      description: "Arrays of strings without enum render as repeatable text rows.",
+      items: {
+        type: "string",
+        title: "Keyword",
+        description: "A free-form keyword for classifying the project.",
+        maxLength: 80,
+      },
+    },
+    labels: {
+      type: "array",
+      title: "Labels",
+      description: "Enum string arrays without uniqueItems render as repeatable select rows.",
+      items: {
+        type: "string",
+        title: "Label",
+        description: "A reusable label for grouping project work.",
+        enum: ["Discovery", "Delivery", "Launch"],
       },
     },
     tools: {
@@ -294,6 +328,34 @@ export const kitchenSinkSchema = {
         ],
       },
     },
+    untitledMixedItems: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        oneOf: [
+          {
+            type: "object",
+            required: ["name"],
+            properties: {
+              name: {
+                type: "string",
+                maxLength: 80,
+              },
+              active: {
+                type: "boolean",
+              },
+            },
+          },
+          {
+            type: "string",
+            enum: ["Red", "Green", "Blue"],
+          },
+          {
+            type: "boolean",
+          },
+        ],
+      },
+    },
     milestones: {
       type: "array",
       title: "Milestones",
@@ -355,3 +417,543 @@ export const primitiveSchema = {
     },
   },
 } satisfies JsonSchema;
+
+const propertyKeyAnnotationSchema: JsonSchema = {
+  "type": ["string"],
+  "title": "Key",
+  "description": "Unique property key.",
+  "minLength": 1
+};
+
+const propertyRequiredAnnotationSchema: JsonSchema = {
+  "type": ["boolean"],
+  "title": "Required",
+  "description": "Whether this property is required."
+};
+
+const propertyTitleAnnotationSchema: JsonSchema = {
+  "type": ["string"],
+  "title": "Title",
+  "description": "Human-readable property title.",
+  "minLength": 1
+};
+
+const propertyDescriptionAnnotationSchema: JsonSchema = {
+  "type": ["string"],
+  "title": "Description",
+  "description": "Human-readable property description.",
+  "minLength": 1
+};
+
+const propertyAnnotationSchema: JsonSchema = {
+  "type": ["object"],
+  "title": "Property Type",
+  "description": "Type-specific validation attributes and schema annotations for this property.",
+  "properties": {},
+  "oneOf": [
+    {
+      "title": "String",
+      "description": "Annotation for a string property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["string"]
+        },
+        "default": {
+          "type": ["string"],
+          "title": "Default",
+          "description": "Default string value."
+        },
+        "minLength": {
+          "type": ["integer"],
+          "title": "Minimum Length",
+          "description": "Minimum allowed string length.",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": ["integer"],
+          "title": "Maximum Length",
+          "description": "Maximum allowed string length.",
+          "minimum": 0
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed string values.",
+          "items": {
+            "type": ["string"],
+            "title": "Enum Value",
+            "description": "Single allowed string value."
+          }
+        },
+        "format": {
+          "type": ["string"],
+          "title": "Format",
+          "description": "String format hint, such as email, uri, date, or date-time.",
+          "enum": ["", "email", "uri", "date", "date-time", "time", "hostname", "ipv4", "ipv6", "uuid"] 
+        },
+        "pattern": {
+          "type": ["string"],
+          "title": "Pattern",
+          "description": "Regular expression pattern for validating the string."
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Number",
+      "description": "Annotation for a number property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["number"]
+        },
+        "default": {
+          "type": ["number"],
+          "title": "Default",
+          "description": "Default number value."
+        },
+        "minimum": {
+          "type": ["number"],
+          "title": "Minimum",
+          "description": "Minimum allowed number."
+        },
+        "maximum": {
+          "type": ["number"],
+          "title": "Maximum",
+          "description": "Maximum allowed number."
+        },
+        "multipleOf": {
+          "type": ["number"],
+          "title": "Multiple Of",
+          "description": "The number must be a multiple of this value.",
+          "minimum": 0
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed number values.",
+          "items": {
+            "type": ["number"],
+            "title": "Enum Value",
+            "description": "Single allowed number value."
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Integer ",
+      "description": "Annotation for an integer property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["integer"]
+        },
+        "default": {
+          "type": ["integer"],
+          "title": "Default",
+          "description": "Default integer value."
+        },
+        "minimum": {
+          "type": ["integer"],
+          "title": "Minimum",
+          "description": "Minimum allowed integer."
+        },
+        "maximum": {
+          "type": ["integer"],
+          "title": "Maximum",
+          "description": "Maximum allowed integer."
+        },
+        "multipleOf": {
+          "type": ["integer"],
+          "title": "Multiple Of",
+          "description": "The integer must be a multiple of this value.",
+          "minimum": 1
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed integer values.",
+          "items": {
+            "type": ["integer"],
+            "title": "Enum Value",
+            "description": "Single allowed integer value."
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Boolean ",
+      "description": "Annotation for a boolean property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["boolean"]
+        },
+        "default": {
+          "type": ["boolean"],
+          "title": "Default",
+          "description": "Default boolean value."
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed boolean values.",
+          "items": {
+            "type": ["boolean"],
+            "title": "Enum Value",
+            "description": "Single allowed boolean value."
+          }
+        }
+      },
+      "required": ["type", "default"]
+    },
+    {
+      "title": "Null",
+      "description": "Annotation for a null field.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Field value type.",
+          "enum": ["null"]
+        },
+        "default": {
+          "type": ["null"],
+          "title": "Default",
+          "description": "Default null value."
+        },
+        "enum": {
+          "type": ["array"],
+          "title": "Enum",
+          "description": "Allowed null values.",
+          "items": {
+            "type": ["null"],
+            "title": "Enum Value",
+            "description": "Single allowed null value."
+          }
+        }
+      },
+      "required": ["type"]
+    },
+    {
+      "title": "Array",
+      "description": "Annotation for an array property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["array"]
+        },
+        "items": {
+          "$ref": "#/$defs/propertyAnnotation",
+          "title": "Items",
+          "description": "Recursive property annotation for array items."
+        },
+        "minItems": {
+          "type": ["integer"],
+          "title": "Minimum Items",
+          "description": "Minimum number of array items.",
+          "minimum": 0
+        },
+        "maxItems": {
+          "type": ["integer"],
+          "title": "Maximum Items",
+          "description": "Maximum number of array items.",
+          "minimum": 0
+        },
+        "uniqueItems": {
+          "type": ["boolean"],
+          "title": "Unique Items",
+          "description": "Whether array items must be unique."
+        }
+      },
+      "required": ["type", "items"]
+    },
+    {
+      "title": "Object",
+      "description": "Annotation for an object property.",
+      "type": ["object"],
+      "properties": {
+        "title": propertyTitleAnnotationSchema,
+        "description": propertyDescriptionAnnotationSchema,
+        "type": {
+          "type": ["string"],
+          "title": "Type",
+          "description": "Property value type.",
+          "enum": ["object"]
+        },
+        "properties": {
+          "type": ["array"],
+          "title": "Properties",
+          "description": "Recursive child property definitions.",
+          "items": {
+            "$ref": "#/$defs/property",
+            "title": "Property",
+            "description": "Recursive property definition for an object property.",
+            "type": ["object"],
+            "properties": {
+              "key": propertyKeyAnnotationSchema,
+              "required": propertyRequiredAnnotationSchema,
+              "propertyAnnotation": {
+                "$ref": "#/$defs/property/properties/propertyAnnotation"
+              }
+            },
+            "required": ["key", "required", "propertyAnnotation"],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": {
+          "type": ["boolean"],
+          "title": "Additional Properties",
+          "description": "Whether additional object properties are allowed."
+        }
+      },
+      "required": ["type", "properties"]
+    }
+  ],
+  "unevaluatedProperties": false
+};
+
+export const kitchenSinkSchemaMetaOld = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Form Meta Schema",
+  "description": "A meta schema for describing a form as an array of recursive field definitions.",
+  "type": ["object"],
+  "properties": {
+    "properties": {
+      "type": ["array"],
+      "title": "Schema",
+      "description": "Array of property definitions used to build the form.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/property",
+        "title": "Property",
+        "description": "A single recursive property definition.",
+        "type": ["object"],
+        "properties": {
+          "key": propertyKeyAnnotationSchema,
+          "required": propertyRequiredAnnotationSchema,
+          "propertyAnnotation": propertyAnnotationSchema
+        },
+        "required": ["key", "required", "propertyAnnotation"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["properties"],
+  "additionalProperties": false,
+  "$defs": {
+    "property": {
+      "title": "Property",
+      "description": "A recursive property definition. Common property metadata is defined directly; type-specific validation attributes are defined under validation.",
+      "type": ["object"],
+      "properties": {
+        "propertyAnnotation": propertyAnnotationSchema
+      },
+      "required": ["propertyAnnotation"]
+    }
+  }
+} satisfies JsonSchema;
+
+export const kitchenSinkSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SchematicForm Builder",
+  "description": "Create your own form using this JSON schema editor.",
+  "type": "object",
+  "propertyOrdering": ["$schema", "title", "description", "type", "properties", "additionalProperties"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "title": "JSON Schema Draft",
+      "description": "JSON Schema draft URI for the generated schema.",
+      "enum": ["https://json-schema.org/draft/2020-12/schema"]
+    },
+    "title": {
+      "type": "string",
+      "title": "Title",
+      "description": "Human-readable schema title.",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "title": "Description",
+      "description": "Human-readable schema description.",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "type": {
+      "type": "string",
+      "title": "Type",
+      "description": "Root schema value type.",
+      "enum": ["object"]
+    },
+    "properties": {
+      "type": "array",
+      "title": "Properties",
+      "description": "Array of property definitions used to build the form.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/property",
+        "title": "Property",
+        "description": "A single recursive property definition."
+      }
+    },
+    "additionalProperties": {
+      "type": "boolean",
+      "title": "Additional Properties",
+      "description": "Whether generated object schemas allow undeclared properties."
+    }
+  },
+  "required": ["$schema", "type", "properties"],
+  "additionalProperties": false,
+  "$defs": {
+    "property": {
+      "title": "Property",
+      "description": "A recursive property definition with its key, required flag, and nested schema annotation.",
+      "type": "object",
+      "propertyOrdering": ["key", "required", "propertyAnnotation"],
+      "properties": {
+        "key": propertyKeyAnnotationSchema,
+        "required": propertyRequiredAnnotationSchema,
+        "propertyAnnotation": {
+          "$ref": "#/$defs/propertyAnnotation"
+        }
+      },
+      "required": ["key", "required", "propertyAnnotation"],
+      "additionalProperties": false
+    },
+    "propertyAnnotation": propertyAnnotationSchema
+  }
+} satisfies JsonSchema;
+
+export const kitchenSinkSchemaInitialValue = {
+  $schema: JSON_SCHEMA_2020_12,
+  title: "Contact Request",
+  description: "Collect contact details and communication preferences.",
+  type: "object",
+  properties: [
+    {
+      key: "fullName",
+      required: true,
+      propertyAnnotation: {
+        type: "string",
+        title: "Full name",
+        description: "The person's full name.",
+        minLength: 2,
+        maxLength: 120,
+      },
+    },
+    {
+      key: "email",
+      required: true,
+      propertyAnnotation: {
+        type: "string",
+        title: "Email",
+        description: "A reachable email address.",
+        format: "email",
+      },
+    },
+    {
+      key: "subscribe",
+      required: false,
+      propertyAnnotation: {
+        type: "boolean",
+        title: "Subscribe",
+        description: "Whether to receive product updates.",
+        default: false,
+      },
+    },
+    {
+      key: "company",
+      required: false,
+      propertyAnnotation: {
+        type: "object",
+        title: "Company",
+        description: "Optional company details for business inquiries.",
+        properties: [
+          {
+            key: "name",
+            required: true,
+            propertyAnnotation: {
+              type: "string",
+              title: "Company name",
+              description: "The organization this person represents.",
+              minLength: 1,
+              maxLength: 120,
+            },
+          },
+          {
+            key: "website",
+            required: false,
+            propertyAnnotation: {
+              type: "string",
+              title: "Website",
+              description: "The organization's public website.",
+              format: "uri",
+            },
+          },
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
+      key: "topics",
+      required: false,
+      propertyAnnotation: {
+        type: "array",
+        title: "Topics",
+        description: "Subjects the person wants to discuss.",
+        items: {
+          type: "string",
+          title: "Topic",
+          description: "A single discussion topic.",
+          enum: ["Product", "Pricing", "Support", "Partnership"],
+        },
+        uniqueItems: true,
+      },
+    },
+    {
+      key: "urgency",
+      required: true,
+      propertyAnnotation: {
+        type: "integer",
+        title: "Urgency",
+        description: "How quickly the team should respond.",
+        minimum: 1,
+        maximum: 5,
+        default: 3,
+      },
+    },
+  ],
+  additionalProperties: false,
+} satisfies ProtoSchemaObject;

@@ -14,6 +14,7 @@ SchematicForm helps application teams turn a data contract into a form without w
 - It supports controlled and uncontrolled React usage.
 - It can persist uncontrolled drafts to `localStorage`, `sessionStorage`, or a custom storage adapter.
 - It keeps `oneOf` and `anyOf` branch choices user-friendly by using dropdown selectors.
+- It supports local `$defs`/`$ref` reuse, including recursive array item structures.
 
 ## Installing The Package In An App
 
@@ -95,6 +96,14 @@ npm run dev
 
 Open the local Vite URL printed in the terminal, usually `http://127.0.0.1:5173/`.
 
+Run Storybook for component documentation and visual review:
+
+```bash
+npm exec -- storybook dev --host 127.0.0.1 --port 6006
+```
+
+Open `http://127.0.0.1:6006/` and use the Docs tab to inspect `SchematicForm` examples, props, and controls.
+
 Run automated tests:
 
 ```bash
@@ -136,7 +145,7 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 
 | Schema feature | Rendered behavior |
 | --- | --- |
-| `type: "object"` | Nested field group inside a transparent HeroUI surface. |
+| `type: "object"` | Nested field group inside a transparent HeroUI surface. Nested object surfaces are collapsible, expanded by default, and remember expansion state across refreshes. Collapsed objects show up to 10 small summary chips for populated nested fields, including hidden required single-value enum fields; chip labels mirror the expanded field labels, so array item indexes such as `#1` and `#2` appear only when that field label is indexed in the expanded form. Labels and values are trimmed after 20 symbols, booleans show as `On`/`Off`, and overflow is shown with a final `...` chip. Visible invalid fields appear as danger soft chips; empty required invalid fields show a label-only chip, while optional invalid fields show only when they have a value. |
 | `type: "array"` | Repeatable rows with add, move, and remove buttons. |
 | `type: "string"` | Single-line input by default. |
 | Long unformatted string | Text area when `minLength` or `maxLength` is greater than `255`. |
@@ -150,11 +159,15 @@ SchematicForm Beta intentionally supports a clear subset of JSON Schema:
 | `type: "boolean"` | Switch. |
 | Scalar `enum` with fewer than six options | Radio group. |
 | Scalar `enum` with six or more options | Dropdown. |
-| Array of string enum with fewer than six options | Checkbox group. |
-| Array of string enum with six or more options | Multiselect dropdown. |
+| Unique array of string enum with fewer than six options | Checkbox group. |
+| Unique array of string enum with six or more options | Multiselect dropdown. |
+| Non-unique array of string enum | Repeatable rows with a dropdown per item. |
 | `type: "null"` | Display-only title/description block, excluded from form data. |
 | `oneOf` / `anyOf` | Branch dropdown using branch titles. Beta treats `anyOf` as `oneOf`. |
 | `propertyOrdering` | Local convention for field order within objects. |
+| Local `$defs` / `$ref` | Same-document references such as `#/$defs/field` are resolved lazily for rendering and validation. |
+
+Local references are resolved only within the same schema object. Recursive refs are supported when rendering is bounded by data, such as arrays that render existing rows plus an add button. Sibling `title`, `description`, and `default` values on a `$ref` node are honored by the renderer.
 
 Unsupported or intentionally ignored in Beta:
 
@@ -163,7 +176,7 @@ Unsupported or intentionally ignored in Beta:
 - `dependencies`, `dependentRequired`, `dependentSchemas`
 - `if`, `then`, `else`
 - advanced `allOf`
-- remote `$ref` resolution
+- remote or cross-document `$ref` resolution
 - async business validation
 
 ## Draft Persistence
@@ -196,6 +209,7 @@ Ajv is the validation engine. SchematicForm sanitizes the schema before validati
 
 - Display-only `type: "null"` properties are excluded.
 - `anyOf` is validated as `oneOf`.
+- `$defs` entries are sanitized recursively while local `$ref` remains Ajv-owned.
 - Unsupported string formats are ignored.
 - Dependency and conditional keywords are ignored in Beta.
 
@@ -219,10 +233,29 @@ type SchematicFormState<TData = unknown> = {
 | `npm run lint` | Runs TypeScript checks without emitting files. |
 | `npm run typecheck` | Same TypeScript check as `lint`. |
 | `npm run build` | Builds declarations and the library bundle. |
+| `npm exec -- storybook dev --host 127.0.0.1 --port 6006` | Starts local Storybook documentation. |
 | `npm run build:storybook` | Builds static Storybook output. |
 | `npm run dev:acceptance` | Starts the Vite server for manual browser acceptance. |
 | `npm run test:acceptance:install` | Installs the Chromium browser binary used by Playwright. |
 | `npm run test:acceptance` | Runs automated Playwright browser acceptance tests against the demo. |
+
+## Storybook Documentation
+
+Storybook is used as the interactive documentation and visual review surface for `SchematicForm`. Stories live in `src/SchematicForm.stories.tsx` and are discovered through `.storybook/main.ts`.
+
+Start Storybook locally:
+
+```bash
+npm exec -- storybook dev --host 127.0.0.1 --port 6006
+```
+
+Build the static documentation site:
+
+```bash
+npm run build:storybook
+```
+
+The static build is written to `storybook-static/`. Serve that directory with any static file server to review the generated docs output.
 
 ## Package Verification
 
@@ -237,16 +270,20 @@ npm pack --dry-run
 
 ```text
 src/
-  SchematicForm.tsx       Main component and renderer
-  schema.ts               Schema interpretation helpers
-  validation.ts           Ajv integration
-  persistence.ts          Draft storage helpers
-  branchMetadata.ts       Branch pointer rebasing
-  paths.ts                Nested path utilities
-  types.ts                Public and internal types
-  sampleSchemas.ts        Demo/test schemas
+  SchematicForm.tsx         Main component and renderer
+  SchematicForm.stories.tsx Storybook examples and docs stories
+  schema.ts                 Schema interpretation helpers
+  validation.ts             Ajv integration
+  persistence.ts            Draft storage helpers
+  branchMetadata.ts         Branch pointer rebasing
+  paths.ts                  Nested path utilities
+  types.ts                  Public and internal types
+  sampleSchemas.ts          Demo/test schemas
 demo/
   main.tsx                Local demo app
+.storybook/
+  main.ts                 Storybook React Vite configuration
+  preview.ts              Storybook style and control defaults
 tests/
   browser/                Playwright acceptance tests
   setup.ts                jsdom browser API shims

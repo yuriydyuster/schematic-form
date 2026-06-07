@@ -1,4 +1,5 @@
 import Ajv, {type ErrorObject, type ValidateFunction} from "ajv";
+import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 
 import {toFieldPath} from "./paths";
@@ -14,6 +15,7 @@ const ignoredKeys = new Set([
   "else",
   "propertyOrdering",
   "allOf",
+  "unevaluatedProperties",
 ]);
 
 export type SchemaValidator = {
@@ -25,12 +27,7 @@ export function createSchemaValidator(
   errorFormatter?: (issue: ValidationIssue) => string,
 ): SchemaValidator {
   const sanitized = sanitizeSchemaForValidation(schema);
-  const ajv = new Ajv({
-    allErrors: true,
-    strict: true,
-    strictTuples: false,
-    validateSchema: true,
-  });
+  const ajv = createAjvForSchema(sanitized);
   addFormats(ajv);
   ajv.addFormat("time", {
     type: "string",
@@ -58,26 +55,39 @@ export function createSchemaValidator(
   return {
     validate(data: unknown) {
       const ok = validate(data);
-      const issues = (ok ? [] : validate.errors ?? []).map(formatAjvError);
+      const issues = filterBranchSubschemaErrors(ok ? [] : validate.errors ?? []).map(formatAjvError);
       const errors = issues.map((issue) => errorFormatter?.(issue) ?? `${issue.fieldPath}: ${issue.message}`);
       return {isValid: Boolean(ok), issues, errors};
     },
   };
 }
 
-export function sanitizeSchemaForValidation(schema: JsonSchema): JsonSchema | boolean {
-  if (isDisplayOnlySchema(schema)) return true;
+export function sanitizeSchemaForValidation(
+  schema: JsonSchema,
+  context: {rootSchema: JsonSchema} = {rootSchema: schema},
+): JsonSchema | boolean {
+  if (isDisplayOnlySchema(schema, {rootSchema: context.rootSchema})) return true;
 
   const output: JsonSchema = {};
+  const draft202012 = usesDraft202012(context.rootSchema);
   for (const [key, value] of Object.entries(schema)) {
     if (ignoredKeys.has(key)) continue;
     if (key === "format" && !getSupportedFormat(schema)) continue;
+    if (key === "$defs" && isRecord(value)) {
+      output.$defs = Object.fromEntries(
+        Object.entries(value).map(([definitionKey, definitionSchema]) => [
+          definitionKey,
+          sanitizeSchemaValue(definitionSchema, context),
+        ]),
+      );
+      continue;
+    }
     if (key === "anyOf" && Array.isArray(value)) {
-      output.oneOf = value.map((branch) => sanitizeSchemaForValidation(branch as JsonSchema) as JsonSchema);
+      output.oneOf = value.map((branch) => sanitizedSchemaObject(sanitizeSchemaValue(branch, context)));
       continue;
     }
     if (key === "oneOf" && Array.isArray(value)) {
-      output.oneOf = value.map((branch) => sanitizeSchemaForValidation(branch as JsonSchema) as JsonSchema);
+      output.oneOf = value.map((branch) => sanitizedSchemaObject(sanitizeSchemaValue(branch, context)));
       continue;
     }
     if (key === "properties" && isSchemaRecord(value)) {
@@ -85,11 +95,11 @@ export function sanitizeSchemaForValidation(schema: JsonSchema): JsonSchema | bo
       const required = new Set(schema.required ?? []);
 
       for (const [propertyKey, propertySchema] of Object.entries(value)) {
-        if (isDisplayOnlySchema(propertySchema)) {
+        if (isDisplayOnlySchema(propertySchema, {rootSchema: context.rootSchema})) {
           required.delete(propertyKey);
           continue;
         }
-        const sanitizedProperty = sanitizeSchemaForValidation(propertySchema);
+        const sanitizedProperty = sanitizeSchemaForValidation(propertySchema, context);
         if (sanitizedProperty !== true) nextProperties[propertyKey] = sanitizedProperty as JsonSchema;
       }
 
@@ -100,28 +110,66 @@ export function sanitizeSchemaForValidation(schema: JsonSchema): JsonSchema | bo
     if (key === "required") continue;
     if (key === "items") {
       if (Array.isArray(value)) {
-        output.items = value.map((item) => {
-          const sanitizedItem = sanitizeSchemaForValidation(item as JsonSchema);
+        const sanitizedItems = value.map((item) => {
+          const sanitizedItem = sanitizeSchemaValue(item, context);
           return sanitizedItem === true ? {} : (sanitizedItem as JsonSchema);
         });
+        if (draft202012) output.prefixItems = sanitizedItems;
+        else output.items = sanitizedItems;
       } else if (isSchema(value)) {
-        const sanitizedItems = sanitizeSchemaForValidation(value);
+        const sanitizedItems = sanitizeSchemaForValidation(value, context);
         output.items = sanitizedItems === true ? {} : (sanitizedItems as JsonSchema);
       }
       continue;
     }
     if (key === "additionalItems") {
+      const hasTupleItems = Array.isArray(schema.items);
+      if (draft202012 && !hasTupleItems) continue;
       if (isSchema(value)) {
-        const sanitizedAdditionalItems = sanitizeSchemaForValidation(value);
-        output.additionalItems = sanitizedAdditionalItems === true ? {} : (sanitizedAdditionalItems as JsonSchema);
+        const sanitizedAdditionalItems = sanitizeSchemaForValidation(value, context);
+        const additionalItems = sanitizedAdditionalItems === true ? {} : (sanitizedAdditionalItems as JsonSchema);
+        if (draft202012) output.items = additionalItems;
+        else output.additionalItems = additionalItems;
       } else {
-        output.additionalItems = value as boolean;
+        if (draft202012) (output as Record<string, unknown>)["items"] = value as boolean;
+        else output.additionalItems = value as boolean;
       }
+      continue;
+    }
+    if (key === "additionalProperties" && isSchema(value)) {
+      const sanitizedAdditionalProperties = sanitizeSchemaForValidation(value, context);
+      output.additionalProperties = sanitizedAdditionalProperties === true
+        ? {}
+        : (sanitizedAdditionalProperties as JsonSchema);
       continue;
     }
     output[key] = value;
   }
   return output;
+}
+
+function createAjvForSchema(schema: JsonSchema | boolean) {
+  const options = {
+    allErrors: true,
+    strict: true,
+    strictTuples: false,
+    validateSchema: true,
+  };
+  return usesDraft202012(schema) ? new Ajv2020(options) : new Ajv(options);
+}
+
+function sanitizeSchemaValue(value: unknown, context: {rootSchema: JsonSchema}): JsonSchema | boolean {
+  if (typeof value === "boolean") return value;
+  if (isSchema(value)) return sanitizeSchemaForValidation(value, context);
+  return {};
+}
+
+function sanitizedSchemaObject(value: JsonSchema | boolean): JsonSchema {
+  return value === true ? {} : value === false ? {not: {}} : value;
+}
+
+function usesDraft202012(schema: JsonSchema | boolean): boolean {
+  return isSchema(schema) && typeof schema.$schema === "string" && schema.$schema.includes("2020-12");
 }
 
 function formatAjvError(error: ErrorObject): ValidationIssue {
@@ -134,6 +182,30 @@ function formatAjvError(error: ErrorObject): ValidationIssue {
     keyword: error.keyword,
     message: error.message ?? "Invalid value",
   };
+}
+
+function filterBranchSubschemaErrors(errors: ErrorObject[]): ErrorObject[] {
+  const branchErrors = errors.filter(isBranchAggregateError);
+  if (branchErrors.length === 0) return errors;
+
+  return errors.filter((error) => {
+    if (isBranchAggregateError(error)) return true;
+    return !branchErrors.some((branchError) => isNestedBranchError(error, branchError));
+  });
+}
+
+function isBranchAggregateError(error: ErrorObject): boolean {
+  return error.keyword === "oneOf" || error.keyword === "anyOf";
+}
+
+function isNestedBranchError(error: ErrorObject, branchError: ErrorObject): boolean {
+  if (error.instancePath !== branchError.instancePath) return false;
+  if (error.schemaPath.startsWith(`${branchError.schemaPath}/`)) return true;
+
+  const branchParentPath = branchError.schemaPath.replace(/\/(?:oneOf|anyOf)$/, "");
+  return error.keyword === "type" &&
+    branchParentPath !== branchError.schemaPath &&
+    error.schemaPath === `${branchParentPath}/type`;
 }
 
 function requiredPath(error: ErrorObject): string {
@@ -152,6 +224,10 @@ function decodePointerPart(value: string): string {
 }
 
 function isSchema(value: unknown): value is JsonSchema {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

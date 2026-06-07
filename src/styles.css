@@ -2,62 +2,192 @@
 @import "@heroui/styles";
 
 .schematic-form {
-  width: 100%;
+  @apply w-full;
 }
 
-.schematic-form__form,
-.schematic-form__surface,
-.schematic-form__fieldset,
-.schematic-form__field,
-.schematic-form__control,
-.schematic-form__array,
-.schematic-form__array-row,
-.schematic-form__branch {
-  width: 100%;
+.schematic-form__form {
+  @apply flex w-full flex-col gap-3;
 }
 
-.schematic-form__form,
-.schematic-form__surface,
-.schematic-form__fieldset,
-.schematic-form__field-group,
-.schematic-form__field,
-.schematic-form__array,
-.schematic-form__array-items,
-.schematic-form__array-row,
-.schematic-form__array-actions,
-.schematic-form__branch {
-  display: flex;
-  flex-direction: column;
+.schematic-form__form-actions {
+  @apply grid gap-1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 }
 
-.schematic-form__field,
-.schematic-form__array-actions {
-  gap: 0.25rem;
+.schematic-form__surface {
+  @apply flex w-full flex-col rounded-xl border p-3 pb-4;
+}
+
+.schematic-form__object-surface {
+  @apply relative;
+}
+
+.schematic-form__object-surface[data-sf-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.schematic-form__object-header {
+  @apply m-0 flex w-full min-w-0 max-w-full items-start justify-between gap-2;
+  box-sizing: border-box;
+}
+
+.schematic-form__object-header-label {
+  @apply min-w-0 flex-1 pr-2;
+}
+
+.schematic-form__object-toggle {
+  @apply inline-flex size-6 shrink-0 items-center justify-center rounded-full outline-none;
+  cursor: var(--cursor-interactive);
+}
+
+.schematic-form__object-toggle:hover,
+.schematic-form__object-toggle[data-hovered="true"] {
+  background-color: var(--default);
+}
+
+.schematic-form__object-toggle:focus-visible,
+.schematic-form__object-toggle[data-focus-visible="true"] {
+  @apply status-focused;
+}
+
+.schematic-form__object-toggle-icon {
+  @apply block size-2 shrink-0 border-b border-r transition duration-250 motion-reduce:transition-none;
+  border-color: currentColor;
+  transform: rotate(45deg);
+}
+
+.schematic-form__object-toggle-icon[data-expanded="true"] {
+  transform: rotate(225deg);
+}
+
+.schematic-form__object-description {
+  @apply mb-3 mt-0 flex w-full flex-col;
+}
+
+.schematic-form__object-description > .schematic-form__description {
+  @apply mt-0;
+}
+
+.schematic-form__object-summary {
+  @apply flex flex-wrap gap-1;
+}
+
+.schematic-form__object-summary-chip {
+  @apply max-w-full;
+}
+
+.schematic-form__object-summary-chip--clickable {
+  @apply cursor-pointer;
+}
+
+.schematic-form__object-summary-chip .chip__label {
+  @apply min-w-0 truncate;
+}
+
+.schematic-form__object-content {
+  @apply block;
+}
+
+.schematic-form__object-content[hidden] {
+  @apply hidden;
+}
+
+.schematic-form__fieldset {
+  @apply flex w-full flex-col gap-0;
 }
 
 .schematic-form__field-group {
-  gap: 1rem;
+  @apply flex flex-col gap-4;
 }
 
 .schematic-form__field-group > :not(:last-child) {
   margin-block: 0;
 }
 
+.schematic-form__fieldset
+  > .fieldset__legend
+  + .schematic-form__field-group:not(:has([data-slot="schema-description"])):not(:has([data-slot="schema-error-message"])) {
+  @apply mt-4;
+}
+
+.schematic-form__field {
+  @apply flex w-full flex-col gap-1;
+}
+
+.schematic-form__control {
+  @apply w-full;
+}
+
+.schematic-form__description,
+.schematic-form__field-error,
+.schematic-form__error-message {
+  @apply m-0 w-full px-0;
+}
+
 .schematic-form__array,
-.schematic-form__array-items,
+.schematic-form__array-items {
+  @apply flex w-full flex-col gap-3;
+}
+
 .schematic-form__array-row {
-  gap: 0.5rem;
+  @apply flex w-full flex-col gap-2;
+}
+
+.schematic-form__row-actions {
+  @apply mt-4 grid grid-cols-3 gap-1;
+}
+
+.schematic-form__array-actions {
+  @apply flex flex-col gap-1;
+}
+
+.schematic-form__branch {
+  @apply flex w-full flex-col gap-0;
+}
+
+.schematic-form__branch-group {
+  @apply space-y-4;
+}
+
+.schematic-form__slider-header,
+.schematic-form__switch-row {
+  @apply flex items-center justify-between;
+}
+
+.schematic-form__slider-header {
+  @apply gap-1;
+}
+
+.schematic-form__switch-row {
+  @apply gap-2;
+}
+
+.schematic-form .switch[data-sf-force-focus-visible="true"] .switch__control {
+  @apply status-focused;
 }
 
 .schematic-form__error-summary {
-  border: 1px solid var(--color-danger, rgb(220 38 38));
-  border-radius: 0.5rem;
-  color: var(--color-danger, rgb(185 28 28));
-  padding: 0.75rem;
+  @apply rounded-lg border p-3;
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .schematic-form__button-icon {
-  flex: 0 0 auto;
+  @apply shrink-0;
+}
+
+.schematic-form__field-icon {
+  @apply size-4;
+  color: var(--muted);
+}
+
+.schematic-form__required-label::after {
+  color: var(--color-danger);
+  content: " *";
+}
+
+.schematic-form__slider-output--empty {
+  visibility: hidden;
 }
 
 .schematic-form__branch-selector.select--secondary[data-invalid="true"] .select__trigger,
