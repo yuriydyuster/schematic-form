@@ -54,6 +54,14 @@ The package is not a full application. `demo/` is a local playground, `src/sampl
 - Preserve stable `schematic-form__*` selectors because tests and consumer CSS may target them.
 - When a bug is discovered but the user requested documentation-only work, create a plan under `docs/plans/` instead of changing runtime code.
 
+## Execution Lessons
+
+- Parallelize only independent commands. Do not run dependent git commands (for example `git add` and `git commit`) in parallel; run them sequentially.
+- Typical requested flow in this repo can be: create plan -> implement -> update the same plan with status/notes -> commit. Preserve that sequence unless user redirects.
+- When a user asks to implement a plan in `docs/plans/`, append `Status` and `Implementation Notes` with the completion date in that same plan file after implementation and verification.
+- Always run `npm run test:acceptance` with escalation so Playwright web server startup can bind local ports without sandbox-related flakes.
+- After creating a commit, verify with `git status --short` and `git show --name-only HEAD` to confirm intended file scope.
+
 ## Testing Expectations
 
 Use focused tests for the affected layer:
