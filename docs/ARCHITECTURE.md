@@ -177,4 +177,4 @@ The static output is written to `storybook-static/`. Do not edit generated Story
 - No cross-document `$id` reference registry.
 - No async validation hook.
 - No custom elements package.
-- No publishing automation.
+- No semantic-release or automatic version bumping.

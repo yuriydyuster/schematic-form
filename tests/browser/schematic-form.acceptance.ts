@@ -3,6 +3,25 @@ import {expect, test, type Locator, type Page} from "@playwright/test";
 const draftKey = "schematic-form:proto-schema-demo";
 const initialPropertyCount = 6;
 
+function getBuilderForm(page: Page): Locator {
+  return page.locator("section.demo-form .schematic-form__form").first();
+}
+
+function getRootTextInput(page: Page, pointer: string): Locator {
+  return getBuilderForm(page).locator(`[data-sf-path="${pointer}"]`).getByRole("textbox").first();
+}
+
+function getRootPropertiesAddButton(page: Page): Locator {
+  return getBuilderForm(page)
+    .locator('[data-sf-path="/properties"]')
+    .getByRole("button", {name: /add property/i})
+    .last();
+}
+
+function getTopLevelPropertyKeyInput(page: Page, index: number): Locator {
+  return getBuilderForm(page).locator(`[data-sf-path="/properties/${index}"] [name="properties[${index}].key"]`);
+}
+
 function collectRuntimeErrors(page: Page): string[] {
   const errors: string[] = [];
 
@@ -27,10 +46,10 @@ async function expectNoRuntimeErrors(errors: string[]) {
 }
 
 async function addField(page: Page, index: number) {
-  await page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i}).click();
+  await getRootPropertiesAddButton(page).click();
   const row = page.locator(`[data-sf-path="/properties/${index}"]`);
   await expect(row.getByText(`Property #${index + 1}`)).toBeVisible();
-  await expect(row.getByLabel("Key")).toBeVisible();
+  await expect(getTopLevelPropertyKeyInput(page, index)).toBeVisible();
   return row;
 }
 
@@ -42,26 +61,26 @@ async function selectValidation(page: Page, row: Locator, validationName: string
 
 test("loads the demo without browser runtime errors", async ({page}) => {
   const errors = collectRuntimeErrors(page);
+  const form = getBuilderForm(page);
 
   await resetDemo(page);
 
   await expect(page.getByRole("heading", {level: 2, name: "SchematicForm Builder"})).toBeVisible();
-  await expect(page.getByLabel("Name")).toBeVisible();
-  await expect(page.getByLabel("Title")).toBeVisible();
-  await expect(page.getByLabel("Description")).toBeVisible();
+  await expect(getRootTextInput(page, "/title")).toBeVisible();
+  await expect(getRootTextInput(page, "/description")).toBeVisible();
   await expect(page.getByLabel("JSON Schema Draft")).toHaveCount(0);
   await expect(page.getByLabel("Type")).toHaveCount(0);
   await expect(page.getByLabel("Current form state")).toBeVisible();
-  await expect(page.locator('[data-sf-path="/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
+  await expect(getRootPropertiesAddButton(page)).toBeVisible();
   await expect(page.getByText("Create your own form using this JSON schema editor.")).toBeVisible();
-  await expect(page.locator('[data-sf-path="/properties/0"]').getByLabel("Key")).toHaveValue("fullName");
-  await expect(page.locator('[data-sf-path="/properties/3"]').getByLabel("Key")).toHaveValue("company");
-  await expect(page.locator('[data-sf-path="/properties/4"]').getByLabel("Key")).toHaveValue("topics");
-  await expect(page.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /string property type/i})).toBeVisible();
-  await expect(page.locator('[data-sf-path="/properties/3"]').getByRole("button", {name: /object property type/i})).toBeVisible();
-  await expect(page.locator('[data-sf-path="/properties/3/propertyAnnotation/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
-  await expect(page.locator('[data-sf-path="/properties/4"]').getByRole("button", {name: /array property type/i})).toBeVisible();
-  await expect(page.locator('[data-sf-path="/properties/4/propertyAnnotation/items"]').getByRole("button", {name: /string items/i})).toBeVisible();
+  await expect(getTopLevelPropertyKeyInput(page, 0)).toHaveValue("fullName");
+  await expect(getTopLevelPropertyKeyInput(page, 3)).toHaveValue("company");
+  await expect(getTopLevelPropertyKeyInput(page, 4)).toHaveValue("topics");
+  await expect(form.locator('[data-sf-path="/properties/0"]').getByRole("button", {name: /string property type/i})).toBeVisible();
+  await expect(form.locator('[data-sf-path="/properties/3"]').getByRole("button", {name: /object property type/i})).toBeVisible();
+  await expect(form.locator('[data-sf-path="/properties/3/propertyAnnotation/properties"]').getByRole("button", {name: /add property/i})).toBeVisible();
+  await expect(form.locator('[data-sf-path="/properties/4"]').getByRole("button", {name: /array property type/i})).toBeVisible();
+  await expect(form.locator('[data-sf-path="/properties/4/propertyAnnotation/items"]').getByRole("button", {name: /string items/i})).toBeVisible();
   await expectNoRuntimeErrors(errors);
 });
 
@@ -69,11 +88,12 @@ test("invalid submit shows the summary and focuses the first invalid field", asy
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
-  await page.getByLabel("Name").fill("");
-  await page.getByRole("button", {name: "Submit"}).click();
+  const firstKeyInput = getBuilderForm(page).locator('[data-sf-path="/properties/0"]').getByLabel("Key");
+  await firstKeyInput.fill("");
+  await getBuilderForm(page).getByRole("button", {name: "Submit"}).click();
 
   await expect(page.getByRole("alert")).toContainText("Please review the highlighted fields.");
-  await expect(page.getByLabel("Name")).toBeFocused();
+  await expect(firstKeyInput).toBeFocused();
   await expectNoRuntimeErrors(errors);
 });
 
@@ -83,19 +103,20 @@ test("recursive array rows add, move, and remove while preserving sibling values
   await resetDemo(page);
 
   await addField(page, initialPropertyCount);
-  await page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key").fill("first");
+  await getTopLevelPropertyKeyInput(page, initialPropertyCount).fill("first");
   await addField(page, initialPropertyCount + 1);
-  await page.locator(`[data-sf-path="/properties/${initialPropertyCount + 1}"]`).getByLabel("Key").fill("second");
+  await getTopLevelPropertyKeyInput(page, initialPropertyCount + 1).fill("second");
 
   await page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByRole("button", {name: /move down/i}).click();
 
-  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key")).toHaveValue("second");
-  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount + 1}"]`).getByLabel("Key")).toHaveValue("first");
+  await expect(getTopLevelPropertyKeyInput(page, initialPropertyCount)).toHaveValue("second");
+  await expect(getTopLevelPropertyKeyInput(page, initialPropertyCount + 1)).toHaveValue("first");
 
   await page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByRole("button", {name: /remove/i}).click();
 
-  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key")).toHaveValue("first");
-  await expect(page.getByLabel("Current form state").locator("pre")).toContainText('"key": "first"');
+  const state = page.getByLabel("Current form state").locator("pre");
+  await expect(state).toContainText('"key": "first"');
+  await expect(state).not.toContainText('"key": "second"');
   await expectNoRuntimeErrors(errors);
 });
 
@@ -109,7 +130,7 @@ test("branch selectors switch and validate only the active branch", async ({page
   await expect(row.getByText("Items", {exact: true})).toBeVisible();
   await expect(row.getByText("Properties", {exact: true})).toHaveCount(0);
 
-  await page.getByRole("button", {name: "Submit"}).click();
+  await getBuilderForm(page).getByRole("button", {name: "Submit"}).click();
 
   await expect(page.getByText(/must have required property 'properties'/i)).toHaveCount(0);
   await expect(page.getByText(/must match exactly one schema/i)).toHaveCount(0);
@@ -120,13 +141,12 @@ test("valid proto-schema submit opens a generated form preview drawer", async ({
   const errors = collectRuntimeErrors(page);
 
   await resetDemo(page);
-  await page.getByLabel("Name").fill("GeneratedCustomer");
-  await page.getByLabel("Title").fill("Generated Customer");
+  await getRootTextInput(page, "/title").fill("Generated Customer");
   const row = await addField(page, initialPropertyCount);
-  await row.getByLabel("Key").fill("customerName");
+  await getTopLevelPropertyKeyInput(page, initialPropertyCount).fill("customerName");
   await selectValidation(page, row, "String");
   await row.getByLabel("Title").fill("Customer name");
-  await page.getByRole("button", {name: "Submit"}).click();
+  await getBuilderForm(page).getByRole("button", {name: "Submit"}).click();
 
   const drawer = page.getByRole("dialog", {name: "Generated Form Preview"});
   await expect(drawer).toBeVisible();
@@ -145,7 +165,7 @@ test("draft persistence restores uncontrolled form data after reload", async ({p
 
   await resetDemo(page);
   const row = await addField(page, initialPropertyCount);
-  await row.getByLabel("Key").fill("persistent_key");
+  await getTopLevelPropertyKeyInput(page, initialPropertyCount).fill("persistent_key");
   await page.waitForFunction(
     (key) => window.localStorage.getItem(key)?.includes("persistent_key"),
     draftKey,
@@ -153,7 +173,7 @@ test("draft persistence restores uncontrolled form data after reload", async ({p
 
   await page.reload();
 
-  await expect(page.locator(`[data-sf-path="/properties/${initialPropertyCount}"]`).getByLabel("Key")).toHaveValue("persistent_key");
+  await expect(getTopLevelPropertyKeyInput(page, initialPropertyCount)).toHaveValue("persistent_key");
   await expect(page.getByLabel("Current form state").locator("pre")).toContainText("persistent_key");
   await expectNoRuntimeErrors(errors);
 });
