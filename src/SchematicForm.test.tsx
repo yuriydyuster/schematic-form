@@ -1213,6 +1213,61 @@ describe("SchematicForm", () => {
     await waitFor(() => expect(screen.getByLabelText("Card number")).toHaveFocus());
   });
 
+  test("does not seed primitive string branch data and keeps format issues on the branch field only", async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn<(state: SchematicFormState) => void>();
+    const schema = {
+      type: "object",
+      properties: {
+        preferredContact: {
+          title: "Preferred contact",
+          oneOf: [
+            {
+              type: "string",
+              title: "Email",
+              format: "email",
+            },
+            {
+              type: "string",
+              title: "Website",
+              format: "uri",
+            },
+          ],
+        },
+      },
+    } satisfies JsonSchema;
+
+    const {container} = render(<SchematicForm schema={schema} onStateChange={onStateChange} validationMode="hybrid" />);
+    const branch = getSurface(container, "/preferredContact");
+
+    await user.click(within(branch).getByRole("button", {name: /select an option preferred contact/i}));
+    await user.click(await screen.findByRole("option", {name: "Email"}));
+
+    await waitFor(() => {
+      const lastState = onStateChange.mock.calls.at(-1)?.[0];
+      expect(lastState?.data).not.toHaveProperty("preferredContact");
+      expect(lastState?.errors).toEqual([]);
+    });
+
+    const selector = within(branch).getByRole("button", {name: /email preferred contact/i}).closest(".select");
+    expect(selector).toBeInTheDocument();
+    expect(selector).not.toHaveAttribute("data-invalid", "true");
+    expect(within(branch).queryByText(/must match format "email"/i)).not.toBeInTheDocument();
+
+    const emailField = within(branch).getByRole("textbox", {name: "Email"});
+    await user.click(emailField);
+    await user.tab();
+    expect(within(branch).queryByText(/must match format "email"/i)).not.toBeInTheDocument();
+
+    await user.type(emailField, "invalid");
+    await user.tab();
+
+    await waitFor(() => {
+      expect(within(branch).getAllByText(/must match format "email"/i)).toHaveLength(1);
+    });
+    expect(selector).not.toHaveAttribute("data-invalid", "true");
+  });
+
   test("restores cached oneOf branch values without submitting inactive branch data", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn<(state: SchematicFormState, event: React.FormEvent) => void>();

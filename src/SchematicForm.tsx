@@ -1383,7 +1383,7 @@ function renderBranch<TData>(
     ? context.branchSelection[pointer] ?? undefined
     : getDefaultBranchIndex(schema, branches, {rootSchema: context.rootSchema, refStack: resolved.refStack});
   const selected = selectedIndex == null ? undefined : branches[selectedIndex];
-  const issues = getBranchSelectorIssues(context.getVisibleIssues(pointer), selectedIndex);
+  const issues = getBranchSelectorIssues(context.getVisibleIssues(pointer), selected);
   const branchOptions = branches.map((branch, index) => ({
     key: String(index),
     label: branch.title || `Option ${index + 1}`,
@@ -2216,8 +2216,12 @@ function getRootSchemaLabel(schema: JsonSchema): string {
   return "";
 }
 
-function getBranchSelectorIssues(issues: ValidationIssue[], selectedIndex: number | undefined): ValidationIssue[] {
-  if (selectedIndex == null) return issues;
+function getBranchSelectorIssues(issues: ValidationIssue[], selectedBranch: JsonSchema | undefined): ValidationIssue[] {
+  if (!selectedBranch) return issues;
+
+  const selectedType = getSchemaType(selectedBranch);
+  if (selectedType && selectedType !== "object" && selectedType !== "array") return [];
+
   return issues.filter((issue) => issue.keyword !== "oneOf" && issue.keyword !== "anyOf");
 }
 
@@ -2549,7 +2553,6 @@ function defaultBranchValue(
 
   const type = getSchemaType(schema, {rootSchema, refStack: resolved.refStack});
   if (type === "null") return null;
-  if (type === "string") return "";
   if (type === "number" || type === "integer") return schema.minimum ?? 0;
   return undefined;
 }
